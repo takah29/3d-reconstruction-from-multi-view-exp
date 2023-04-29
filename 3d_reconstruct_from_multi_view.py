@@ -2,7 +2,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from lib.camera import Camera
-from lib.camera_calibration import orthographic_self_calibration, paraperspective_self_calibration
+from lib.affine_camera_calibration import (
+    orthographic_self_calibration,
+    paraperspective_self_calibration,
+)
 from lib.utils import sample_hemisphere_points, set_points1
 from lib.visualization import init_3d_ax, plot_2d_points, plot_3d_basis, plot_3d_points
 
