@@ -42,39 +42,29 @@ def orthographic_self_calibration(*data_list):
     U, Sigma, Vt = np.linalg.svd(W)
 
     U_ = U[:, :3]
-    u_ = [U_[i : i + 2] for i in range(0, U_.shape[0], 2)]
 
-    n_images = W.shape[0] // 2
-    B_cal = np.zeros((3, 3, 3, 3))
-    for n in range(n_images):
-        for (i, j, k, l) in product(range(3), repeat=4):
-            B_cal[i, j, k, l] += (
-                u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l]
-                + u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l]
-                + 0.25
-                * (u_[n][0, i] * u_[n][1, j] + u_[n][1, i] * u_[n][0, j])
-                * (u_[n][0, k] * u_[n][1, l] + u_[n][1, k] * u_[n][0, l])
-            )
+    def _create_B_cal(U_):
+        u_ = [U_[i : i + 2] for i in range(0, U_.shape[0], 2)]
 
-    B1 = np.zeros((3, 3))
-    B2 = np.zeros((3, 3))
-    B3 = np.zeros((3, 3))
-    B4 = np.zeros((3, 3))
-    for (i, j) in product(range(3), repeat=2):
-        B1[i, j] = B_cal[i, i, j, j]
-        B2[i, j] = np.sqrt(2) * B_cal[i, i, (j + 1) % 3, (j + 2) % 3]
-        B3[i, j] = np.sqrt(2) * B_cal[(i + 1) % 3, (i + 2) % 3, j, j]
-        B4[i, j] = 2 * B_cal[(i + 1) % 3, (i + 2) % 3, (j + 1) % 3, (j + 2) % 3]
-    B = np.block([[B1, B2], [B3, B4]])
+        n_images = W.shape[0] // 2
+        B_cal = np.zeros((3, 3, 3, 3))
+        for n in range(n_images):
+            for (i, j, k, l) in product(range(3), repeat=4):
+                B_cal[i, j, k, l] += (
+                    u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l]
+                    + u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l]
+                    + 0.25
+                    * (u_[n][0, i] * u_[n][1, j] + u_[n][1, i] * u_[n][0, j])
+                    * (u_[n][0, k] * u_[n][1, l] + u_[n][1, k] * u_[n][0, l])
+                )
+
+        return B_cal
+
+    B_cal = _create_B_cal(U_)
+
+    B = _get_B(B_cal)
     tau = np.linalg.inv(B) @ np.array([1, 1, 1, 0, 0, 0])
-
-    T = np.array(
-        [
-            [tau[0], tau[5] / np.sqrt(2), tau[4] / np.sqrt(2)],
-            [tau[5] / np.sqrt(2), tau[1], tau[3] / np.sqrt(2)],
-            [tau[4] / np.sqrt(2), tau[3] / np.sqrt(2), tau[2]],
-        ]
-    )
+    T = _get_T(tau)
 
     if np.linalg.det(T) < 0:
         T *= -1
@@ -89,19 +79,164 @@ def orthographic_self_calibration(*data_list):
     return S.T, R
 
 
+def paraperspective_self_calibration(*data_list):
+    """疑似透視投影カメラモデルによる自己校正を行う
+
+    S.shape: (3, n_feature_points)
+    R.shape: (image_num, 3, 3)
+    """
+    # 観測行列Wと画像中心tの取得
+    W, t = _get_observation_matrix(*data_list)
+
+    # 因子分解
+    U, Sigma, Vt = np.linalg.svd(W)
+
+    U_ = U[:, :3]
+
+    def _create_B_cal(U_):
+        u_ = [U_[i : i + 2] for i in range(0, U_.shape[0], 2)]
+        a = t.prod(axis=1)
+        c = t[:, 0] ** 2 - t[:, 1] ** 2
+
+        n_images = W.shape[0] // 2
+        B_cal = np.zeros((3, 3, 3, 3))
+        for n in range(n_images):
+            for (i, j, k, l) in product(range(3), repeat=4):
+                B_cal[i, j, k, l] += (
+                    a[n] ** 2
+                    * (
+                        u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l]
+                        + u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l]
+                        - u_[n][0, i] * u_[n][0, j] * u_[n][1, k] * u_[n][1, l]
+                        - u_[n][1, i] * u_[n][1, j] * u_[n][0, k] * u_[n][0, l]
+                    )
+                    + 0.25
+                    * c[n] ** 2
+                    * (
+                        u_[n][0, i] * u_[n][1, j] * u_[n][0, k] * u_[n][1, l]
+                        + u_[n][1, i] * u_[n][0, j] * u_[n][0, k] * u_[n][1, l]
+                        + u_[n][0, i] * u_[n][1, j] * u_[n][1, k] * u_[n][0, l]
+                        + u_[n][1, i] * u_[n][0, j] * u_[n][1, k] * u_[n][0, l]
+                    )
+                    - 0.5
+                    * a[n]
+                    * c[n]
+                    * (
+                        u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][1, l]
+                        + u_[n][0, i] * u_[n][0, j] * u_[n][1, k] * u_[n][0, l]
+                        + u_[n][0, i] * u_[n][1, j] * u_[n][0, k] * u_[n][0, l]
+                        + u_[n][1, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l]
+                        - u_[n][0, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l]
+                        - u_[n][1, i] * u_[n][0, j] * u_[n][1, k] * u_[n][1, l]
+                        - u_[n][1, i] * u_[n][1, j] * u_[n][0, k] * u_[n][1, l]
+                        - u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][0, l]
+                    )
+                )
+
+        return B_cal
+
+    B_cal = _create_B_cal(U_)
+
+    B = _get_B(B_cal)
+    L, P = np.linalg.eig(B)
+    tau = P[:, np.argmin(L)]
+    T = _get_T(tau)
+
+    if np.linalg.det(T) < 0:
+        T *= -1
+
+    A = np.linalg.cholesky(T)
+    M = U_ @ A
+    S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
+
+    # カメラの回転行列を計算
+    R = _compute_rotation_mat(M, U_, T, t, method="paraperspective")
+
+    return S.T, R
+
+
+def _get_B(B_cal):
+    """行列Bを取得する"""
+    B1 = np.zeros((3, 3))
+    B2 = np.zeros((3, 3))
+    B3 = np.zeros((3, 3))
+    B4 = np.zeros((3, 3))
+    for (i, j) in product(range(3), repeat=2):
+        B1[i, j] = B_cal[i, i, j, j]
+        B2[i, j] = np.sqrt(2) * B_cal[i, i, (j + 1) % 3, (j + 2) % 3]
+        B3[i, j] = np.sqrt(2) * B_cal[(i + 1) % 3, (i + 2) % 3, j, j]
+        B4[i, j] = 2 * B_cal[(i + 1) % 3, (i + 2) % 3, (j + 1) % 3, (j + 2) % 3]
+    B = np.block([[B1, B2], [B3, B4]])
+
+    return B
+
+
+def _get_T(tau):
+    """計量行列Tを取得する"""
+    T = np.array(
+        [
+            [tau[0], tau[5] / np.sqrt(2), tau[4] / np.sqrt(2)],
+            [tau[5] / np.sqrt(2), tau[1], tau[3] / np.sqrt(2)],
+            [tau[4] / np.sqrt(2), tau[3] / np.sqrt(2), tau[2]],
+        ]
+    )
+
+    return T
+
+
 def _get_zeta_beta_g_for_orthographic(M, t):
     zeta = np.ones(M.shape[0] // 2)
     beta = np.zeros(M.shape[0] // 2)
     g = t
 
-    return zeta, beta, t
+    return zeta, beta, g
 
 
-def _compute_rotation_mat(M, U, T, t, method="orthographic"):
-    """U, T, tから回転行列を計算する"""
-    # (image_num, )
+def _get_zeta_beta_g_for_paraperspective(M, U_, T, t):
+    image_num = t.shape[0]
+
+    P = np.ones((image_num, 3, 2))
+    P[:, :2, 1] = t**2
+    P[:, 2, 0] = 0.0
+    P[:, 2, 1] = t.prod(axis=1)
+
+    U1 = U_[::2]
+    U2 = U_[1::2]
+
+    Q = np.zeros((image_num, 3))
+    # (image_num, 1, 3) @ (1, 3, 3) @ (image_num, 3, 1) -> (image_num, 1, 1)
+    Q[:, 0] = (U1[:, np.newaxis] @ T[np.newaxis] @ U1[..., np.newaxis]).ravel()
+    Q[:, 1] = (U1[:, np.newaxis] @ T[np.newaxis] @ U2[..., np.newaxis]).ravel()
+    Q[:, 2] = (U2[:, np.newaxis] @ T[np.newaxis] @ U2[..., np.newaxis]).ravel()
+
+    # (image_num, 2, 3) @ (image_num, 3, 1) -> (image_num, 2, 1) -> (2, image_num)
+    zeta2_inv, beta2 = (np.linalg.pinv(P) @ Q[..., np.newaxis]).squeeze(2).T
+
+    # beta^2 < 0.0 のケース
+    beta2[beta2 < 0.0] = 0.0
+
+    # tx ~ 0.0 かつ ty ~ 0.0 のケース
+    satisfied = (np.abs(t) < 1e-8).all(axis=1)
+    beta2[satisfied] = 0.0
+    zeta2_inv[satisfied] = ((Q[:, 0] + Q[:, 2]) / 2)[satisfied]
+    zeta2_inv[zeta2_inv <= 0.0] = 1e8
+
+    zeta = np.sqrt(1 / zeta2_inv)
+    beta = np.sqrt(beta2)
+
+    # (image_num,1) * (image_num, 2)
+    g = zeta[:, np.newaxis] * t
+
+    return zeta, beta, g
+
+
+def _compute_rotation_mat(M, U_, T, t, method):
+    """カメラの回転行列を計算する"""
+
     if method == "orthographic":
         zeta, beta, g = _get_zeta_beta_g_for_orthographic(M, t)
+    elif method == "paraperspective":
+        zeta, beta, g = _get_zeta_beta_g_for_paraperspective(M, U_, T, t)
     else:
         raise ValueError()
 
