@@ -68,10 +68,7 @@ def __factorization_by_orthographic_projection(W):
     if np.linalg.det(T) < 0:
         T *= -1
 
-    # A = np.linalg.cholesky(T)
-    V, P = np.linalg.eig(T)
-    A = P @ np.diag(np.sqrt(V)) @ np.linalg.inv(P)
-
+    A = np.linalg.cholesky(T)
     M = U_ @ A
     S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
 
