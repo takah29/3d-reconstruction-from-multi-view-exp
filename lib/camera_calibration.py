@@ -3,18 +3,24 @@ import numpy as np
 
 
 def _get_observation_matrix(*data_list):
+    """観測行列と各画像の重心ベクトルを計算する
+
+    W.shape: (2 * image_num, n_feature_points)
+    t.shape: (image_num, 2)
+    """
     length_list = [len(x) for x in data_list]
     if length_list.count(length_list[0]) != len(length_list):
         raise ValueError()
 
     W = np.hstack(data_list).T
-    W -= W.mean(axis=1)[:,np.newaxis]
+    t = W.mean(axis=1)[:, np.newaxis]
+    W -= t
 
-    return W
+    return W, t.reshape(-1, 2)
 
 
-def _factorization(W):
-    """観測行列Wから運動行列Mと形状行列Sを求める"""
+def factorization_method(W):
+    """観測行列Wから因子分解法によって、運動行列Mと形状行列Sを求める"""
     U, Sigma, Vt = np.linalg.svd(W)
 
     M = U[:, :3]
@@ -23,11 +29,16 @@ def _factorization(W):
     return M, S
 
 
-def __factorization_by_orthographic_projection(W):
-    """観測行列Wから運動行列Mと形状行列Sを求める
+def orthographic_self_calibration(*data_list):
+    """平行投影カメラモデルによる自己校正を行う
 
-    平行投影カメラモデルを仮定する
+    S.shape: (3, n_feature_points)
+    R.shape: (image_num, 3, 3)
     """
+    # 観測行列Wと画像中心tの取得
+    W, t = _get_observation_matrix(*data_list)
+
+    # 因子分解
     U, Sigma, Vt = np.linalg.svd(W)
 
     U_ = U[:, :3]
@@ -72,19 +83,47 @@ def __factorization_by_orthographic_projection(W):
     M = U_ @ A
     S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
 
-    return M, S
+    # カメラの回転行列を計算
+    R = _compute_rotation_mat(M, U_, T, t, method="orthographic")
+
+    return S.T, R
 
 
-def affine_reconstruction(*data_list, method="orthographic"):
-    W = _get_observation_matrix(*data_list)
+def _get_zeta_beta_g_for_orthographic(M, t):
+    zeta = np.ones(M.shape[0] // 2)
+    beta = np.zeros(M.shape[0] // 2)
+    g = t
 
+    return zeta, beta, t
+
+
+def _compute_rotation_mat(M, U, T, t, method="orthographic"):
+    """U, T, tから回転行列を計算する"""
+    # (image_num, )
     if method == "orthographic":
-        M, S = __factorization_by_orthographic_projection(W)
-    elif method == "simple":
-        M, S = _factorization(W)
+        zeta, beta, g = _get_zeta_beta_g_for_orthographic(M, t)
     else:
         raise ValueError()
 
-    M_list = [M[i : i + 2] for i in range(0, M.shape[0], 2)]
+    # (image_num, 1) * (image_num, 3) - (image_num, 1) * ((image_num, 1, 2) @ (image_num, 2, 3)) -> (image_num, 3)
+    r3_denom = zeta[..., np.newaxis] * np.cross(M[::2], M[1::2]) - beta[..., np.newaxis] * (
+        g[:, np.newaxis] @ M.reshape(-1, 2, 3)
+    ).squeeze(1)
+    # (image_num, 1) * (image_num, 1, 2) @ (image_num, 2, 1) -> (image_num, 1)
+    r3_num = 1 + beta[..., np.newaxis] ** 2 * (g.reshape(-1, 1, 2) @ g.reshape(-1, 2, 1))[0]
+    # (image_num, 3) / (image_num, 1) -> (image_num, 3)
+    r3 = r3_denom / r3_num
 
-    return M_list, S.T
+    # (image_num, 1) * (image_num, 3) + (image_num, 1) * (image_num, 3) -> (image_num, 3)
+    r1 = zeta[:, np.newaxis] * M[::2] + (beta * g[:, 0])[:, np.newaxis] * r3
+
+    # (image_num, 1) * (image_num, 3) + (image_num, 1) * (image_num, 3) -> (image_num, 3)
+    r2 = zeta[:, np.newaxis] * M[1::2] + (beta * g[:, 1])[:, np.newaxis] * r3
+
+    R = np.hstack((r1, r2, r3)).reshape(-1, 3, 3).transpose(0, 2, 1)
+
+    # 厳密な回転行列に補正する
+    U, _, Vt = np.linalg.svd(R)
+    R = U @ Vt
+
+    return R
