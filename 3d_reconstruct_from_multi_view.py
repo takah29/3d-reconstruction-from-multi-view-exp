@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from lib.camera import Camera
-from lib.camera_calibration import affine_reconstruction
+from lib.camera_calibration import orthographic_self_calibration
 from lib.utils import sample_hemisphere_points, set_points1
 from lib.visualization import init_3d_ax, plot_2d_points, plot_3d_basis, plot_3d_points
 
@@ -11,7 +11,7 @@ def main():
     np.random.seed(123)
 
     f = 1.0
-    image_num = 7
+    image_num = 5
 
     # カメラの設定
     camera_pos = sample_hemisphere_points(image_num, 5)
@@ -26,7 +26,8 @@ def main():
     # 2次元画像平面へ射影
     x_list = []
     for camera in cameras:
-        x_list.append(camera.project_points(X, f))
+        x = camera.project_points(X, f, method="perspective")
+        x_list.append(x)
 
     # ノイズの追加
     # for x in x_list:
@@ -36,7 +37,7 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    M_list, X_ = affine_reconstruction(*x_list)
+    X_, R_ = orthographic_self_calibration(*x_list)
 
     # 3次元点の表示
     ax = init_3d_ax()
@@ -67,6 +68,8 @@ def main():
     # 復元したデータ点の表示
     ax = init_3d_ax()
     plot_3d_points(X_, ax)
+    for i, R in enumerate(R_, start=1):
+        plot_3d_basis(R, -3 * R[:, 2], ax, label=f"Camera{i}")
 
     plt.show()
 
