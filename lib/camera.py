@@ -17,6 +17,17 @@ class Camera:
     def get_pose(self):
         return self._calc_pose()
 
+    def project_points(self, X, f0, method="perspective"):
+        """3次元点を画像面に投影する"""
+        if method == "perspective":
+            res = self._perspective_projection(X, f0)
+        elif method == "orthographic":
+            res = self._orthographic_projection(X)
+        else:
+            raise ValueError()
+
+        return res
+
     def _calc_camera_matrix(self, f0):
         R, t = self._calc_pose()
         return np.diag((self.f, self.f, f0)) @ np.hstack([R.T, -R.T @ t[:, np.newaxis]])
@@ -30,7 +41,13 @@ class Camera:
         t = self.o
         return R, t
 
-    def project_points(self, X, f0):
+    def _perspective_projection(self, X, f0):
         X_ext = np.hstack((X, np.ones((X.shape[0], 1))))
         Xproj = X_ext @ self.get_camera_matrix(f0).T
         return Xproj[:, :2] / Xproj[:, -1:]
+
+    def _orthographic_projection(self, X):
+        X_ext = np.hstack((X, np.ones((X.shape[0], 1))))
+        R, t = self._calc_pose()
+        Xproj = X_ext @ np.hstack([R.T, -R.T @ t[:, np.newaxis]]).T
+        return Xproj[:, :2]
