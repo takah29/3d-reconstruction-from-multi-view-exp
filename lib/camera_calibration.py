@@ -8,6 +8,7 @@ def _get_observation_matrix(*data_list):
         raise ValueError()
 
     W = np.hstack(data_list).T
+    W -= W.mean(axis=1)[:,np.newaxis]
 
     return W
 
