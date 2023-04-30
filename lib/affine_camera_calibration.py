@@ -79,8 +79,8 @@ def orthographic_self_calibration(*data_list):
     return S.T, R
 
 
-def paraperspective_self_calibration(*data_list):
-    """疑似透視投影カメラモデルによる自己校正を行う
+def symmetric_affine_self_calibration(*data_list):
+    """対象アフィンカメラモデルによる自己校正を行う
 
     S.shape: (3, n_feature_points)
     R.shape: (image_num, 3, 3)
@@ -150,7 +150,7 @@ def paraperspective_self_calibration(*data_list):
     S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
 
     # カメラの回転行列を計算
-    R = _compute_rotation_mat(M, U_, T, t, method="paraperspective")
+    R = _compute_rotation_mat(M, U_, T, t, method="symmetric_affine")
 
     return S.T, R
 
@@ -192,7 +192,7 @@ def _get_zeta_beta_g_for_orthographic(M, t):
     return zeta, beta, g
 
 
-def _get_zeta_beta_g_for_paraperspective(M, U_, T, t):
+def _get_zeta_beta_g_for_symmetric_affine(M, U_, T, t):
     image_num = t.shape[0]
 
     P = np.ones((image_num, 3, 2))
@@ -235,8 +235,8 @@ def _compute_rotation_mat(M, U_, T, t, method):
 
     if method == "orthographic":
         zeta, beta, g = _get_zeta_beta_g_for_orthographic(M, t)
-    elif method == "paraperspective":
-        zeta, beta, g = _get_zeta_beta_g_for_paraperspective(M, U_, T, t)
+    elif method == "symmetric_affine":
+        zeta, beta, g = _get_zeta_beta_g_for_symmetric_affine(M, U_, T, t)
     else:
         raise ValueError()
 
