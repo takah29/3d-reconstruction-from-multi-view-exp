@@ -51,3 +51,22 @@ class Camera:
         R, t = self._calc_pose()
         Xproj = X_ext @ np.hstack([R.T, -R.T @ t[:, np.newaxis]]).T
         return Xproj[:, :2]
+
+
+if __name__ == "__main__":
+    # 簡易テスト
+    import numpy.testing as nptest
+
+    X = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+
+    # case1
+    camera = Camera((0, 0, -1), (0, 0, 1), f=1)
+    Xproj = camera.project_points(X, 1.0)
+    nptest.assert_array_almost_equal(Xproj, np.array([[0, 0], [1, 0], [0, 1], [0, 0]]))
+
+    # case2
+    camera = Camera((0, -1, 0), (0, 1, 0), f=1)
+    Xproj = camera.project_points(X, 1.0)
+    nptest.assert_array_almost_equal(Xproj, np.array([[0, 0], [1, 0], [0, 0], [0, -1]]))
+
+    print("Passed all tests.")
