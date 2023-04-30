@@ -15,7 +15,7 @@ def main():
     np.random.seed(123)
 
     f = 1.0
-    image_num = 5
+    image_num = 6
 
     # カメラの設定
     camera_pos = sample_hemisphere_points(image_num, 5)
@@ -34,8 +34,8 @@ def main():
         x_list.append(x)
 
     # ノイズの追加
-    # for x in x_list:
-    #     x += 0.005 * np.random.randn(*x.shape)
+    for x in x_list:
+        x += 0.005 * np.random.randn(*x.shape)
 
     camera_poses = []
     for camera in cameras:
@@ -63,8 +63,9 @@ def main():
         for j in range_width:
             # camera(i * j)で射影した2次元データ点のプロット
             ax_list.append(plt.subplot(height, width, width * i + j + 1))
-            ax_list[width * i + j].set_xlim(-2, 2)
-            ax_list[width * i + j].set_ylim(-2, 2)
+            ax_list[width * i + j].set_title(f"Camera {width * i + j + 1}")
+            ax_list[width * i + j].set_xlim(-1, 1)
+            ax_list[width * i + j].set_ylim(-1, 1)
             plt.grid()
             plot_2d_points(x_list[width * i + j], ax_list[width * i + j], color="black")
 
