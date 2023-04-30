@@ -147,6 +147,92 @@ def symmetric_affine_self_calibration(
     return S.T, R
 
 
+def paraperspective_self_calibration(
+    *data_list: List[npt.NDArray[np.floating]], f: npt.NDArray[np.floating]
+) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    """疑似平行投影カメラモデルによる自己校正を行う
+
+    S.shape: (3, n_feature_points)
+    R.shape: (image_num, 3, 3)
+    """
+    if len(data_list) != len(f):
+        raise ValueError()
+
+    # 観測行列Wと画像中心tの取得
+    W, t = _get_observation_matrix(*data_list)
+
+    # 因子分解
+    U, Sigma, Vt = np.linalg.svd(W)
+
+    U_ = U[:, :3]
+
+    def _create_B_cal(U_, f):
+        u_ = [U_[i : i + 2] for i in range(0, U_.shape[0], 2)]
+        alpha = 1 / (1 + t[:, 0] ** 2 / f**2)
+        beta = 1 / (1 + t[:, 1] ** 2 / f**2)
+        gamma = t.prod(axis=1) / f**2
+
+        n_images = W.shape[0] // 2
+        B_cal = np.zeros((3, 3, 3, 3))
+        for n in range(n_images):
+            for (i, j, k, l) in product(range(3), repeat=4):
+                B_cal[i, j, k, l] += (
+                    (gamma[n] ** 2 + 1)
+                    * alpha[n] ** 2
+                    * (u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l])
+                    + (gamma[n] ** 2 + 1)
+                    * beta[n] ** 2
+                    * (u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l])
+                    + u_[n][0, i] * u_[n][1, j] * u_[n][0, k] * u_[n][1, l]
+                    + u_[n][0, i] * u_[n][1, j] * u_[n][1, k] * u_[n][0, l]
+                    + u_[n][1, i] * u_[n][0, j] * u_[n][0, k] * u_[n][1, l]
+                    + u_[n][1, i] * u_[n][0, j] * u_[n][1, k] * u_[n][0, l]
+                    - alpha[n]
+                    * gamma[n]
+                    * (
+                        u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][1, l]
+                        + u_[n][0, i] * u_[n][0, j] * u_[n][1, k] * u_[n][0, l]
+                        + u_[n][0, i] * u_[n][1, j] * u_[n][0, k] * u_[n][0, l]
+                        + u_[n][1, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l]
+                    )
+                    - beta[n]
+                    * gamma[n]
+                    * (
+                        u_[n][1, i] * u_[n][1, j] * u_[n][0, k] * u_[n][1, l]
+                        + u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][0, l]
+                        + u_[n][0, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l]
+                        + u_[n][1, i] * u_[n][0, j] * u_[n][1, k] * u_[n][1, l]
+                    )
+                    + (gamma[n] ** 2 - 1)
+                    * alpha[n]
+                    * beta[n]
+                    * (
+                        u_[n][0, i] * u_[n][0, j] * u_[n][1, k] * u_[n][1, l]
+                        + u_[n][1, i] * u_[n][1, j] * u_[n][0, k] * u_[n][0, l]
+                    )
+                )
+
+        return B_cal
+
+    B_cal = _create_B_cal(U_, f)
+
+    B = _get_B(B_cal)
+    L, P = np.linalg.eig(B)
+    tau = P[:, np.argmin(L)]
+    T = _get_T(tau)
+
+    if np.linalg.det(T) < 0:
+        T *= -1
+
+    A = np.linalg.cholesky(T)
+    M = U_ @ A
+    S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
+
+    # カメラの回転行列を計算
+    R = _compute_rotation_mat(M, U_, T, t)
+
+    return S.T, R
+
 
 def _get_observation_matrix(*data_list):
     """観測行列と各画像の重心ベクトルを計算する
