@@ -42,7 +42,6 @@ def main():
         camera_poses.append((camera.get_pose()))
 
     X_, R_ = paraperspective_self_calibration(x_list, f * np.ones(image_num))
-    # X_, R_ = orthographic_self_calibration(x_list)
 
     # 3次元点の表示
     ax = init_3d_ax()
