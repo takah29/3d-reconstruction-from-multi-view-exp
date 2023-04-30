@@ -5,7 +5,7 @@ from lib.camera import Camera
 from lib.affine_camera_calibration import (
     orthographic_self_calibration,
     symmetric_affine_self_calibration,
-    paraperspective_self_calibration
+    paraperspective_self_calibration,
 )
 from lib.utils import sample_hemisphere_points, set_points1
 from lib.visualization import init_3d_ax, plot_2d_points, plot_3d_basis, plot_3d_points
@@ -41,7 +41,8 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_ = paraperspective_self_calibration(*x_list, f=f * np.ones(image_num))
+    X_, R_ = paraperspective_self_calibration(x_list, f * np.ones(image_num))
+    # X_, R_ = orthographic_self_calibration(x_list)
 
     # 3次元点の表示
     ax = init_3d_ax()

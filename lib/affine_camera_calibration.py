@@ -18,7 +18,7 @@ def factorization_method(
 
 
 def orthographic_self_calibration(
-    *data_list: List[npt.NDArray[np.floating]],
+    data_list: List[npt.NDArray[np.floating]],
 ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """平行投影カメラモデルによる自己校正を行う
 
@@ -70,7 +70,7 @@ def orthographic_self_calibration(
 
 
 def symmetric_affine_self_calibration(
-    *data_list: List[npt.NDArray[np.floating]],
+    data_list: List[npt.NDArray[np.floating]],
 ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """対象アフィンカメラモデルによる自己校正を行う
 
@@ -148,7 +148,7 @@ def symmetric_affine_self_calibration(
 
 
 def paraperspective_self_calibration(
-    *data_list: List[npt.NDArray[np.floating]], f: npt.NDArray[np.floating]
+    data_list: List[npt.NDArray[np.floating]], f: npt.NDArray[np.floating]
 ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """疑似平行投影カメラモデルによる自己校正を行う
 
