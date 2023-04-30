@@ -1,25 +1,13 @@
 from itertools import product
+from typing import List, Tuple
+
 import numpy as np
+import numpy.typing as npt
 
 
-def _get_observation_matrix(*data_list):
-    """観測行列と各画像の重心ベクトルを計算する
-
-    W.shape: (2 * image_num, n_feature_points)
-    t.shape: (image_num, 2)
-    """
-    length_list = [len(x) for x in data_list]
-    if length_list.count(length_list[0]) != len(length_list):
-        raise ValueError()
-
-    W = np.hstack(data_list).T
-    t = W.mean(axis=1)[:, np.newaxis]
-    W -= t
-
-    return W, t.reshape(-1, 2)
-
-
-def factorization_method(W):
+def factorization_method(
+    W: npt.NDArray[np.floating],
+) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """観測行列Wから因子分解法によって、運動行列Mと形状行列Sを求める"""
     U, Sigma, Vt = np.linalg.svd(W)
 
@@ -29,7 +17,9 @@ def factorization_method(W):
     return M, S
 
 
-def orthographic_self_calibration(*data_list):
+def orthographic_self_calibration(
+    *data_list: List[npt.NDArray[np.floating]],
+) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """平行投影カメラモデルによる自己校正を行う
 
     S.shape: (3, n_feature_points)
@@ -74,12 +64,14 @@ def orthographic_self_calibration(*data_list):
     S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
 
     # カメラの回転行列を計算
-    R = _compute_rotation_mat(M, U_, T, t, method="orthographic")
+    R = _compute_rotation_mat(M, U_, T, t)
 
     return S.T, R
 
 
-def symmetric_affine_self_calibration(*data_list):
+def symmetric_affine_self_calibration(
+    *data_list: List[npt.NDArray[np.floating]],
+) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """対象アフィンカメラモデルによる自己校正を行う
 
     S.shape: (3, n_feature_points)
@@ -150,9 +142,27 @@ def symmetric_affine_self_calibration(*data_list):
     S = np.linalg.inv(A) @ np.diag(Sigma[:3]) @ Vt[:3]
 
     # カメラの回転行列を計算
-    R = _compute_rotation_mat(M, U_, T, t, method="symmetric_affine")
+    R = _compute_rotation_mat(M, U_, T, t)
 
     return S.T, R
+
+
+
+def _get_observation_matrix(*data_list):
+    """観測行列と各画像の重心ベクトルを計算する
+
+    W.shape: (2 * image_num, n_feature_points)
+    t.shape: (image_num, 2)
+    """
+    length_list = [len(x) for x in data_list]
+    if length_list.count(length_list[0]) != len(length_list):
+        raise ValueError()
+
+    W = np.hstack(data_list).T
+    t = W.mean(axis=1)[:, np.newaxis]
+    W -= t
+
+    return W, t.reshape(-1, 2)
 
 
 def _get_B(B_cal):
@@ -184,15 +194,7 @@ def _get_T(tau):
     return T
 
 
-def _get_zeta_beta_g_for_orthographic(M, t):
-    zeta = np.ones(M.shape[0] // 2)
-    beta = np.zeros(M.shape[0] // 2)
-    g = t
-
-    return zeta, beta, g
-
-
-def _get_zeta_beta_g_for_symmetric_affine(M, U_, T, t):
+def _get_zeta_beta_g(U_, T, t):
     image_num = t.shape[0]
 
     P = np.ones((image_num, 3, 2))
@@ -230,17 +232,13 @@ def _get_zeta_beta_g_for_symmetric_affine(M, U_, T, t):
     return zeta, beta, g
 
 
-def _compute_rotation_mat(M, U_, T, t, method):
+def _compute_rotation_mat(M, U_, T, t):
     """カメラの回転行列を計算する"""
 
-    if method == "orthographic":
-        zeta, beta, g = _get_zeta_beta_g_for_orthographic(M, t)
-    elif method == "symmetric_affine":
-        zeta, beta, g = _get_zeta_beta_g_for_symmetric_affine(M, U_, T, t)
-    else:
-        raise ValueError()
+    zeta, beta, g = _get_zeta_beta_g(U_, T, t)
 
-    # (image_num, 1) * (image_num, 3) - (image_num, 1) * ((image_num, 1, 2) @ (image_num, 2, 3)) -> (image_num, 3)
+    # (image_num, 1) * (image_num, 3) - (image_num, 1) * ((image_num, 1, 2) @ (image_num, 2, 3))
+    # -> (image_num, 3)
     r3_denom = zeta[..., np.newaxis] * np.cross(M[::2], M[1::2]) - beta[..., np.newaxis] * (
         g[:, np.newaxis] @ M.reshape(-1, 2, 3)
     ).squeeze(1)
