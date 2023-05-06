@@ -18,12 +18,12 @@ class ThreeDimensionalPlotter:
         self.ax.set_ylim3d(zlim)
         self.ax.set_zlim3d(xlim)
 
-    def plot_basis(self, basis: NDArray, pos: NDArray, label=None) -> None:
+    def plot_basis(self, basis: NDArray, pos: NDArray, label: str | None = None) -> None:
         """
         基底をプロットする。回転行列やカメラの姿勢のプロットにも使用できる。
         """
-        assert pos.shape == (3,)
         assert basis.shape == (3, 3)
+        assert pos.shape == (3,)
 
         basis = basis.T
 
@@ -55,14 +55,14 @@ class ThreeDimensionalPlotter:
 
 
 class TwoDimensionalMatrixPlotter:
-    def __init__(self, n_row, n_col, figsize=None, title=None, is_grid=True):
+    def __init__(self, n_row, n_col, figsize=None, is_grid=True):
         plt.figure(figsize=figsize)
 
         self.n_row = n_row
         self.n_col = n_col
         self.is_grid = is_grid
 
-    def select(self, plot_id):
+    def select(self, plot_id: int):
         self.current_ax = plt.subplot(self.n_row, self.n_col, plot_id + 1)
 
     def set_property(self, title, xlim=[-1.0, 1.0], ylim=[-1.0, 1.0]):
@@ -72,7 +72,7 @@ class TwoDimensionalMatrixPlotter:
         if self.is_grid:
             self.current_ax.grid()
 
-    def plot_points(self, x, color="black") -> None:
+    def plot_points(self, x: NDArray, color="black") -> None:
         """2次元点群をプロットする、colorはリストで与えても良い"""
         self.current_ax.scatter(x[:, 1], x[:, 0], c=color, marker=".")
 
@@ -88,17 +88,19 @@ class TwoDimensionalMatrixPlotter:
 if __name__ == "__main__":
     import numpy as np
 
-    ax = init_3d_ax()
+    plotter_3d = ThreeDimensionalPlotter()
+    plotter_3d.set_lim([-2, 2], [-2, 2], [-2, 2])
 
     # 基底のプロット
-    pos = np.array([1, 0, 0])
+    pos = np.array([0, 1, 0])
     omega = 1.0
     basis = np.array(
         [[1, 0, 0], [0, np.cos(omega), -np.sin(omega)], [0, np.sin(omega), np.cos(omega)]]
-    ).T  # 横ベクトル向けに転置する
-    plot_3d_basis(pos, basis, ax, label="test")
+    )  # 横ベクトル向けに転置する
+    plotter_3d.plot_basis(basis, pos, label="test")
 
     # データ点のプロット
-    X = np.eye(3) @ basis + pos
-    plot_3d_points(X, ax, "blue")
-    plt.show()
+    X = np.eye(3) @ basis.T + pos
+    plotter_3d.plot_points(X, "blue")
+    plotter_3d.show()
+    plotter_3d.close()
