@@ -5,18 +5,6 @@ import numpy as np
 import numpy.typing as npt
 
 
-def factorization_method(
-    W: npt.NDArray[np.floating],
-) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
-    """観測行列Wから因子分解法によって、運動行列Mと形状行列Sを求める"""
-    U, Sigma, Vt = np.linalg.svd(W)
-
-    M = U[:, :3]
-    S = np.diag(Sigma[:3]) @ Vt[:3]
-
-    return M, S
-
-
 def orthographic_self_calibration(
     data_list: List[npt.NDArray[np.floating]],
 ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
