@@ -49,27 +49,40 @@ class ThreeDimensionalPlotter:
         """3次元グラフを表示する"""
         plt.show()
 
-    def clear(self):
+    def close(self):
         plt.clf()
+        plt.close()
 
 
-def plot_2d_points(x, ax, color="black") -> None:
-    """2次元点群をプロットする、colorはリストで与えても良い"""
-    ax.scatter(x[:, 1], x[:, 0], c=color, marker="o")
+class TwoDimensionalMatrixPlotter:
+    def __init__(self, n_row, n_col, figsize=None, title=None, is_grid=True):
+        plt.figure(figsize=figsize)
 
+        self.n_row = n_row
+        self.n_col = n_col
+        self.is_grid = is_grid
 
-def subplot_2d_points(x1, x2, color="black"):
-    ax1 = plt.subplot(1, 2, 1)
-    ax1.set_xlim(-2, 2)
-    ax1.set_ylim(-2, 2)
-    plt.grid()
-    plot_2d_points(x1, ax1, color=color)
+    def select(self, plot_id):
+        self.current_ax = plt.subplot(self.n_row, self.n_col, plot_id + 1)
 
-    ax2 = plt.subplot(1, 2, 2)
-    ax2.set_xlim(-2, 2)
-    ax2.set_ylim(-2, 2)
-    plt.grid()
-    plot_2d_points(x2, ax2, color=color)
+    def set_property(self, title, xlim=[-1.0, 1.0], ylim=[-1.0, 1.0]):
+        self.current_ax.set_title(title)
+        self.current_ax.set_xlim(ylim)
+        self.current_ax.set_ylim(xlim)
+        if self.is_grid:
+            self.current_ax.grid()
+
+    def plot_points(self, x, color="black") -> None:
+        """2次元点群をプロットする、colorはリストで与えても良い"""
+        self.current_ax.scatter(x[:, 1], x[:, 0], c=color, marker=".")
+
+    def show(self):
+        """2次元グラフを表示する"""
+        plt.show()
+
+    def close(self):
+        plt.clf()
+        plt.close()
 
 
 if __name__ == "__main__":
