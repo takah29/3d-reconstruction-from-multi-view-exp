@@ -2,44 +2,55 @@ import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 
 
-def init_3d_ax():
-    """Zを奥行きとした右手系座標を設定する"""
-    plt.figure(figsize=(10, 10))
-    ax = plt.axes(projection="3d")
+class ThreeDimensionalPlotter:
+    def __init__(self, figsize=None, title=None):
+        """Xを上、Zを奥行きとした右手系座標を設定する"""
+        plt.figure(figsize=figsize)
 
-    ax.set_xlim3d([-5.0, 5.0])
-    ax.set_xlabel("Y")
+        self.ax = plt.axes(projection="3d")
+        self.ax.set_title(title)
+        self.ax.set_xlabel("Y")
+        self.ax.set_ylabel("Z")
+        self.ax.set_zlabel("X")
 
-    ax.set_ylim3d([-5.0, 5.0])
-    ax.set_ylabel("Z")
+    def set_lim(self, xlim=[-5.0, 5.0], ylim=[-5.0, 5.0], zlim=[-5.0, 5.0]):
+        self.ax.set_xlim3d(ylim)
+        self.ax.set_ylim3d(zlim)
+        self.ax.set_zlim3d(xlim)
 
-    ax.set_zlim3d([-5.0, 5.0])
-    ax.set_zlabel("X")
+    def plot_basis(self, basis: NDArray, pos: NDArray, label=None) -> None:
+        """
+        基底をプロットする。回転行列やカメラの姿勢のプロットにも使用できる。
+        """
+        assert pos.shape == (3,)
+        assert basis.shape == (3, 3)
 
-    return ax
+        basis = basis.T
 
+        cols = ["r", "g", "b", "r", "r", "g", "g", "b", "b"]
+        _ = self.ax.quiver(
+            [pos[1]] * 3,
+            [pos[2]] * 3,
+            [pos[0]] * 3,
+            basis[:, 1],
+            basis[:, 2],
+            basis[:, 0],
+            colors=cols,
+        )
 
-def plot_3d_basis(basis: NDArray, pos: NDArray, ax, label=None) -> None:
-    """
-    基底をプロットする。回転行列のプロットにも使用できる。
-    """
-    assert pos.shape == (3,)
-    assert basis.shape == (3, 3)
+        if label is not None:
+            self.ax.text(pos[1], pos[2], pos[0], label)
 
-    basis = basis.T
+    def plot_points(self, X: NDArray, color="black") -> None:
+        """3次元点群をプロットする、colorはリストで与えても良い"""
+        self.ax.scatter(X[:, 1], X[:, 2], X[:, 0], c=color, marker="o")
 
-    cols = ["r", "g", "b", "r", "r", "g", "g", "b", "b"]
-    _ = ax.quiver(
-        [pos[1]] * 3, [pos[2]] * 3, [pos[0]] * 3, basis[:, 1], basis[:, 2], basis[:, 0], colors=cols
-    )
+    def show(self):
+        """3次元グラフを表示する"""
+        plt.show()
 
-    if label is not None:
-        ax.text(pos[1], pos[2], pos[0], label)
-
-
-def plot_3d_points(X: NDArray, ax, color="black") -> None:
-    """3次元点群をプロットする、colorはリストで与えても良い"""
-    ax.scatter(X[:, 1], X[:, 2], X[:, 0], c=color, marker="o")
+    def clear(self):
+        plt.clf()
 
 
 def plot_2d_points(x, ax, color="black") -> None:

@@ -8,7 +8,7 @@ from lib.affine_camera_calibration import (
     paraperspective_self_calibration,
 )
 from lib.utils import sample_hemisphere_points, set_points1
-from lib.visualization import init_3d_ax, plot_2d_points, plot_3d_basis, plot_3d_points
+from lib.visualization import ThreeDimensionalPlotter, plot_2d_points
 
 
 def main():
@@ -44,19 +44,18 @@ def main():
     X_, R_ = paraperspective_self_calibration(x_list, f * np.ones(image_num))
 
     # 3次元点の表示
-    ax = init_3d_ax()
-    plot_3d_points(X, ax)
+    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
+    plotter_3d.set_lim()
+    plotter_3d.plot_points(X)
     for i, camera_pose in enumerate(camera_poses, start=1):
-        plot_3d_basis(camera_pose[0], camera_pose[1], ax, label=f"Camera{i}")
+        plotter_3d.plot_basis(camera_pose[0], camera_pose[1], label=f"Camera{i}")
+    plotter_3d.show()
+    plotter_3d.clear()
 
-    # 3次元データ点の表示
-    plt.show()
-    plt.clf()
-
-    ax_list = []
     # 2次元に射影したデータ点の表示
     width = 3
     height = (image_num - 1) // width + 1
+    ax_list = []
     for i in range(height):
         range_width = range(image_num % width) if i == image_num // width else range(width)
         for j in range_width:
@@ -67,16 +66,16 @@ def main():
             ax_list[width * i + j].set_ylim(-1, 1)
             plt.grid()
             plot_2d_points(x_list[width * i + j], ax_list[width * i + j], color="black")
-
     plt.show()
 
     # 復元したデータ点の表示
-    ax = init_3d_ax()
-    plot_3d_points(X_, ax)
+    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
+    plotter_3d.set_lim()
+    plotter_3d.plot_points(X_)
     for i, R in enumerate(R_, start=1):
-        plot_3d_basis(R, -3 * R[:, 2], ax, label=f"Camera{i}")
-
-    plt.show()
+        plotter_3d.plot_basis(R, -3 * R[:, 2], label=f"Camera{i}")
+    plotter_3d.show()
+    plotter_3d.clear()
 
 
 if __name__ == "__main__":
