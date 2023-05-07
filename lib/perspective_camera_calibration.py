@@ -50,7 +50,7 @@ def _create_data_matrix(x_list, f0):
     return x
 
 
-def _compute_reprojection_error(X, M, S, f0):
+def _compute_reprojection_error(x, M, S, f0):
     """再投影誤差を計算する"""
     # (3 * n_images, 4) @ (4, n_points) -> (3 * n_images, n_points) -> (n_images, 3, n_points)
     # -> (n_points, n_images, 3)
@@ -59,17 +59,17 @@ def _compute_reprojection_error(X, M, S, f0):
     # 第3成分を1にする正規化 (a, b, c) -> (a/c, b/c, 1) を行う
     PX = np.apply_along_axis(lambda x: x / x[2], 2, PX)
 
-    X_minus_PX = X - PX
+    x_minus_PX = x - PX
 
     # (n_points, n_images, 1, 3) @ (n_points, n_images, 3, 1) -> (n_points, n_images, 1, 1)
     # -> (n_points, n_images) -> ()
-    E = f0 * np.sqrt((X_minus_PX[:, :, np.newaxis] @ X_minus_PX[..., np.newaxis]).squeeze().mean())
+    E = f0 * np.sqrt((x_minus_PX[:, :, np.newaxis] @ x_minus_PX[..., np.newaxis]).squeeze().mean())
 
     return E
 
 
 def _compute_projective_depth_primary_method(
-    x, f0: float, tolerance: float = 2.0, max_iter: int = 100
+    x, f0: float, tolerance: float, max_iter: int = 200
 ) -> npt.NDArray:
     """データXから基本法で射影的奥行きzを求める
 
@@ -143,6 +143,7 @@ def _compute_projective_depth_primary_method(
         E = _compute_reprojection_error(x, M, S, f0)
 
         count += 1
+        print(f"Iteration {count}: reprojection_error = {E:.8}")
 
         if E < tolerance or count >= max_iter:
             break
@@ -154,7 +155,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    x, f0: float, tolerance: float = 2.0, max_iter: int = 100
+    x, f0: float, tolerance: float, max_iter: int = 10
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
@@ -177,12 +178,12 @@ def _compute_projective_depth_dual_method(
 
         # Wの各列を単位ベクトルにする
         # (n_images, 3, n_points)
-        x = x.transpose(1, 2, 0)
+        xt = x.transpose(1, 2, 0)
         # (n_images, 3, n_points) / (n_images, 1, 1) -> (n_images, 3, n_points)
         # -> (n_points, n_images, 3)
-        W = (x / (np.linalg.norm(x, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]).transpose(
-            2, 0, 1
-        )
+        W = (
+            xt / (np.linalg.norm(xt, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]
+        ).transpose(2, 0, 1)
 
         U, Sigma, Vt = np.linalg.svd(W.reshape(n_points, -1).T)
 
@@ -193,13 +194,13 @@ def _compute_projective_depth_dual_method(
         V_gram_mat = V_ @ V_.T
 
         # (n_images, n_points, 3) @ (n_images, 3, n_points) -> (n_images, n_points, n_points)
-        x_gram_mat = x.transpose(0, 2, 1) @ x
+        x_gram_mat = xt.transpose(0, 2, 1) @ xt
 
         # (n_points, n_points) @ (n_images, n_points, n_points) -> (n_images, n_points, n_points)
         denom = V_gram_mat * x_gram_mat
 
         # (n_images, 3, n_points) -> (n_images, n_points)
-        x_norm = np.linalg.norm(x, axis=1)
+        x_norm = np.linalg.norm(xt, axis=1)
 
         # (n_images, n_points, 1) @ (n_images, 1, n_points) -> (n_images, n_points, n_points)
         num = x_norm[..., np.newaxis] @ x_norm[:, np.newaxis]
@@ -229,9 +230,10 @@ def _compute_projective_depth_dual_method(
 
         M = U[:, :4]
         S = np.diag(Sigma[:4]) @ V_.T
-        E = _compute_reprojection_error(x.transpose(2, 0, 1), M, S, f0)
+        E = _compute_reprojection_error(x, M, S, f0)
 
         count += 1
+        print(f"Iteration {count}: reprojection_error = {E:.8}")
 
         if E < tolerance or count >= max_iter:
             break
@@ -479,13 +481,18 @@ def _correct_world_coordinates(X, R, t, method="first_camera"):
     return X, R, t
 
 
-def perspective_self_calibration(x_list, f0, method="primary"):
+def perspective_self_calibration(x_list, f0=1.0, tol=0.01, method="primary"):
+    """透視投影カメラモデルによるカメラの自己校正
+
+    ・f0とtolはx_listのデータのスケールから決定する
+    　デフォルト値はデータ分布が[-1, 1]範囲内にあるときの目安
+    """
     x = _create_data_matrix(x_list, f0)
 
     if method == "primary":
-        z = _compute_projective_depth_primary_method(x, f0)
+        z = _compute_projective_depth_primary_method(x, f0, tol)
     elif method == "dual":
-        z = _compute_projective_depth_dual_method(x, f0)
+        z = _compute_projective_depth_dual_method(x, f0, tol)
     else:
         raise ValueError()
 

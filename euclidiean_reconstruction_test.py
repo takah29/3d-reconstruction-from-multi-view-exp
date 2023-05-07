@@ -36,7 +36,7 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_, t_ = perspective_self_calibration(x_list, 1.0, method="dual")
+    X_, R_, t_ = perspective_self_calibration(x_list, 1.0, tol=0.005, method="dual")
 
     # 3次元点の表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
