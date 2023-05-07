@@ -5,6 +5,23 @@ import numpy as np
 import numpy.typing as npt
 
 
+def _get_observation_matrix(*data_list):
+    """観測行列と各画像の重心ベクトルを計算する
+
+    W.shape: (2 * image_num, n_feature_points)
+    t.shape: (image_num, 2)
+    """
+    length_list = [len(x) for x in data_list]
+    if length_list.count(length_list[0]) != len(length_list):
+        raise ValueError()
+
+    W = np.hstack(data_list).T
+    t = W.mean(axis=1)[:, np.newaxis]
+    W -= t
+
+    return W, t.reshape(-1, 2)
+
+
 def factorization_method(
     W: npt.NDArray[np.floating], n_rank=4
 ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
@@ -49,10 +66,10 @@ def _compute_reprojection_error(X, M, S, f0):
     return E
 
 
-def _compute_projective_depth(
+def _compute_projective_depth_primary_method(
     X, f0: float, tolerance: float = 2.0, max_iter: int = 100
 ) -> npt.NDArray:
-    """データXから射影的奥行きzを求める
+    """データXから基本法で射影的奥行きzを求める
 
     Args:
         X (npt.NDArray): アフィンカメラを仮定した観測行列をもとにしたデータ, X.shape = (n_points, n_images, 3)
@@ -77,7 +94,7 @@ def _compute_projective_depth(
 
         U, Sigma, Vt = np.linalg.svd(W.reshape(n_points, -1).T)
 
-        # (3 * n_images, min(2 * n_images, n_points)) -> (3 * n_images, 4) -> (n_images, 3, 4)
+        # (3 * n_images, min(3 * n_images, n_points)) -> (3 * n_images, 4) -> (n_images, 3, 4)
         # -> (4, n_images, 3)
         U_ = U[:, :4].reshape(n_images, 3, 4).transpose(2, 0, 1)
 
@@ -351,10 +368,10 @@ def _update_K(K, Omega, Q):
         delta_K = delta_K.transpose(2, 0, 1)
 
         # (n_images, 3, 3) @ (n_images, 3, 3) -> (n_images, 3, 3)
-        K = K @ delta_K
+        K[is_updatable] = (K @ delta_K)[is_updatable]
 
-        # (n_images, ) * (n_images, 3, 3)
-        K = np.sqrt(C[:, 2, 2])[:, np.newaxis, np.newaxis] * K
+        # (n_images, 1, 1) * (n_images, 3, 3) -> (n_images, 3, 3)
+        K[is_updatable] = (np.sqrt(C[:, 2, 2])[:, np.newaxis, np.newaxis] * K)[is_updatable]
 
         J[is_updatable] = (
             (C[:, 0, 0] / C[:, 2, 2] - 1) ** 2
@@ -396,9 +413,15 @@ def _euclidean_upgrading(P: npt.NDArray, f0: float):
     return H, K
 
 
-def perspective_self_calibration(x_list, f0):
+def perspective_self_calibration(x_list, f0, method="primary"):
     X = _create_data_matrix(x_list, f0)
-    z = _compute_projective_depth(X, f0)
+
+    if method == "primary":
+        z = _compute_projective_depth_primary_method(X, f0)
+    elif method == "dual":
+        z = _compute_projective_depth_dual_method(X, f0)
+    else:
+        raise ValueError()
 
     # (n_points, n_images, 3) * (n_points, n_images, 1) -> (n_points, n_images, 3)
     W = X * z[..., np.newaxis]
