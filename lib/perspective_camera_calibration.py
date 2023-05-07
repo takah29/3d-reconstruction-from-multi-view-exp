@@ -134,6 +134,95 @@ def _compute_projective_depth(
     return z
 
 
+def _compute_projective_depth_dual_method(
+    X, f0: float, tolerance: float = 2.0, max_iter: int = 100
+) -> npt.NDArray:
+    """データXから双対法で射影的奥行きzを求める
+
+    Args:
+        X (npt.NDArray): アフィンカメラを仮定した観測行列をもとにしたデータ, X.shape = (n_points, n_images, 3)
+        tolerance (float, optional): 許容再投影誤差
+
+    Returns:
+        npt.NDArray: 射影的奥行き, z.shape = (n_images, n_feature_points)
+    """
+    n_points = X.shape[0]
+    n_images = X.shape[1]
+
+    z = np.ones((n_points, n_images))
+
+    count = 0
+    while True:
+        # (n_points, n_images, 3) * (n_points, n_images, 1) -> (n_points, n_images, 3)
+        W = X * z[..., np.newaxis]
+
+        # Wの各列を単位ベクトルにする
+        # (n_images, 3, n_points)
+        X = X.transpose(1, 2, 0)
+        # (n_images, 3, n_points) / (n_images, 1, 1) -> (n_images, 3, n_points)
+        # -> (n_points, n_images, 3)
+        W = (X / (np.linalg.norm(X, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]).transpose(
+            2, 0, 1
+        )
+
+        U, Sigma, Vt = np.linalg.svd(W.reshape(n_points, -1).T)
+
+        # (min(3 * n_images, n_points), n_points) -> (4, n_points) -> (n_points, 4)
+        V_ = Vt[:4].T
+
+        # (n_points, 4) @ (4, n_points) -> (n_points, n_points)
+        V_gram_mat = V_ @ V_.T
+
+        # (n_images, n_points, 3) @ (n_images, 3, n_points) -> (n_images, n_points, n_points)
+        X_gram_mat = X.transpose(0, 2, 1) @ X
+
+        # (n_points, n_points) @ (n_images, n_points, n_points) -> (n_images, n_points, n_points)
+        denom = V_gram_mat * X_gram_mat
+
+        # (n_images, 3, n_points) -> (n_images, n_points)
+        X_norm = np.linalg.norm(X, axis=1)
+
+        # (n_images, n_points, 1) @ (n_images, 1, n_points) -> (n_images, n_points, n_points)
+        num = X_norm[..., np.newaxis] @ X_norm[:, np.newaxis]
+
+        # (n_images, n_points, n_points) / (n_images, n_points, n_points)
+        # -> (n_images, n_points, n_points)
+        B = denom / num
+
+        # (n_images, n_points), (n_images, n_points, n_points)
+        eigvals, eigvecs = np.linalg.eig(B)
+
+        # (n_images, n_points) -> (n_images, )
+        max_eigvals_ind = np.argmax(eigvals, axis=1)
+
+        res = []
+        for i, ind in enumerate(max_eigvals_ind):
+            res.append(eigvecs[i][:, ind])
+
+        # (n_points, n_images)
+        xi = np.real(np.vstack(res)).T
+
+        # sum(xi[i]) < 0 の場合はxi[i]の符号を反転する
+        xi[xi.sum(axis=1) < 0] *= -1
+
+        # (n_points, n_images) / (n_points, n_images) -> (n_points, n_images)
+        z[...] = xi / X_norm.T
+
+        M = U[:, :4]
+        S = np.diag(Sigma[:4]) @ V_.T
+        E = _compute_reprojection_error(X.transpose(2, 0, 1), M, S, f0)
+
+        count += 1
+
+        if E < tolerance or count >= max_iter:
+            break
+
+    if count >= max_iter:
+        print("Did not converge because the maximum number of iterations was reached.")
+
+    return z
+
+
 def _calc_omega(Q):
     def _create_A_cal(Q):
         n_images = Q.shape[0]
