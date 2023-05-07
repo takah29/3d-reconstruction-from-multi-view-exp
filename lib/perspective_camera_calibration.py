@@ -414,11 +414,41 @@ def _euclidean_upgrading(P: npt.NDArray, f0: float):
 
 
 def _reconstruct_3d(P: npt.NDArray, S: npt.NDArray, K: npt.NDArray, H: npt.NDArray):
-
+    # (4, 4) @ (4, n_points) -> (4, n_points) -> (n_points, 4)
     X = (np.linalg.inv(H) @ S).T
+
+    # (n_points, 3)
     X = X[:, :3] / X[:, -1:]
 
-    return X
+    # (n_images, 3, 4) @ (4, 4) -> (n_images, 3, 4)
+    P = P @ H
+
+    # (n_images, 3, 3) @ (n_images, 3, 4) -> (n_images, 3, 4)
+    Ab = np.linalg.inv(K) @ P
+
+    s = np.cbrt(np.linalg.det(Ab[:, :, :3]))
+
+    # (n_images, 3, 4) / (n_images, 1, 1) -> (n_images, 3, 3), (n_images, 3, 1)
+    A, b = np.split(Ab / s[:, np.newaxis, np.newaxis], [3], 2)
+
+    U, _, Vt = np.linalg.svd(A)
+
+    # (n_images, 3, 3) @ (n_images, 3, 3) -> (n_images, 3, 3) -> (n_images, 3, 3)
+    R = (U @ Vt).transpose(0, 2, 1)
+
+    # (n_images, 3, 3) @ (n_images, 3, 1) -> (n_images, 3, 1) -> (n_images, 3)
+    t = (-R @ b).squeeze()
+
+    # 第1カメラからみたデータ点の座標値
+    # ((n_points, 3) - (3)) @ (3, 3) -> (n_points, 3)
+    X0 = (X - t[0]) @ R[0]
+
+    if np.sign(X0[:, -1]).sum() <= 0:
+        X *= -1
+        t *= -1
+
+    return X, R, t
+
 
 
 def perspective_self_calibration(x_list, f0, method="primary"):
@@ -435,9 +465,8 @@ def perspective_self_calibration(x_list, f0, method="primary"):
     W = x * z[..., np.newaxis]
 
     M, S = factorization_method(W.reshape(W.shape[0], -1).T)
-
     P = M.reshape(-1, 3, 4)
     H, K = _euclidean_upgrading(P, f0)
-    X = _reconstruct_3d(P, S, K, H)
+    X, R, t = _reconstruct_3d(P, S, K, H)
 
-    return X
+    return X, R, t
