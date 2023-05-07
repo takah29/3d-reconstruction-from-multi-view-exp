@@ -134,40 +134,37 @@ def _compute_projective_depth(
     return z
 
 
-def _calc_omega(P, K):
-    # (n_images, 3, 3) @ (n_images, 3, 4) -> (n_images, 3, 4)
-    Q = np.linalg.inv(K) @ P
-
+def _calc_omega(Q):
     def _create_A_cal(Q):
         n_images = Q.shape[0]
         A_cal = np.zeros((4, 4, 4, 4))
-        for k in range(n_images):
+        for n in range(n_images):
             for (i, j, k, l) in product(range(4), repeat=4):
                 A_cal[i, j, k, l] += (
-                    Q[k, 0, i] * Q[k, 0, j] * Q[k, 0, k] * Q[k, 0, l]
-                    - Q[k, 0, i] * Q[k, 0, j] * Q[k, 1, k] * Q[k, 1, l]
-                    - Q[k, 1, i] * Q[k, 1, j] * Q[k, 0, k] * Q[k, 0, l]
-                    + Q[k, 1, i] * Q[k, 1, j] * Q[k, 1, k] * Q[k, 1, l]
+                    Q[n, 0, i] * Q[n, 0, j] * Q[n, 0, k] * Q[n, 0, l]
+                    - Q[n, 0, i] * Q[n, 0, j] * Q[n, 1, k] * Q[n, 1, l]
+                    - Q[n, 1, i] * Q[n, 1, j] * Q[n, 0, k] * Q[n, 0, l]
+                    + Q[n, 1, i] * Q[n, 1, j] * Q[n, 1, k] * Q[n, 1, l]
                     + 0.25
                     * (
-                        Q[k, 0, i] * Q[k, 1, j] * Q[k, 0, k] * Q[k, 1, l]
-                        + Q[k, 1, i] * Q[k, 0, j] * Q[k, 0, k] * Q[k, 1, l]
-                        + Q[k, 0, i] * Q[k, 1, j] * Q[k, 1, k] * Q[k, 0, l]
-                        + Q[k, 1, i] * Q[k, 0, j] * Q[k, 1, k] * Q[k, 0, l]
+                        Q[n, 0, i] * Q[n, 1, j] * Q[n, 0, k] * Q[n, 1, l]
+                        + Q[n, 1, i] * Q[n, 0, j] * Q[n, 0, k] * Q[n, 1, l]
+                        + Q[n, 0, i] * Q[n, 1, j] * Q[n, 1, k] * Q[n, 0, l]
+                        + Q[n, 1, i] * Q[n, 0, j] * Q[n, 1, k] * Q[n, 0, l]
                     )
                     + 0.25
                     * (
-                        Q[k, 1, i] * Q[k, 2, j] * Q[k, 1, k] * Q[k, 2, l]
-                        + Q[k, 2, i] * Q[k, 1, j] * Q[k, 1, k] * Q[k, 2, l]
-                        + Q[k, 1, i] * Q[k, 2, j] * Q[k, 2, k] * Q[k, 1, l]
-                        + Q[k, 2, i] * Q[k, 1, j] * Q[k, 2, k] * Q[k, 1, l]
+                        Q[n, 1, i] * Q[n, 2, j] * Q[n, 1, k] * Q[n, 2, l]
+                        + Q[n, 2, i] * Q[n, 1, j] * Q[n, 1, k] * Q[n, 2, l]
+                        + Q[n, 1, i] * Q[n, 2, j] * Q[n, 2, k] * Q[n, 1, l]
+                        + Q[n, 2, i] * Q[n, 1, j] * Q[n, 2, k] * Q[n, 1, l]
                     )
                     + 0.25
                     * (
-                        Q[k, 2, i] * Q[k, 0, j] * Q[k, 2, k] * Q[k, 0, l]
-                        + Q[k, 0, i] * Q[k, 2, j] * Q[k, 2, k] * Q[k, 0, l]
-                        + Q[k, 2, i] * Q[k, 0, j] * Q[k, 0, k] * Q[k, 2, l]
-                        + Q[k, 0, i] * Q[k, 2, j] * Q[k, 0, k] * Q[k, 2, l]
+                        Q[n, 2, i] * Q[n, 0, j] * Q[n, 2, k] * Q[n, 0, l]
+                        + Q[n, 0, i] * Q[n, 2, j] * Q[n, 2, k] * Q[n, 0, l]
+                        + Q[n, 2, i] * Q[n, 0, j] * Q[n, 0, k] * Q[n, 2, l]
+                        + Q[n, 0, i] * Q[n, 2, j] * Q[n, 0, k] * Q[n, 2, l]
                     )
                 )
 
@@ -178,7 +175,7 @@ def _calc_omega(P, K):
         for i, j in product(range(4), repeat=2):
             A1[i, j] = A_cal[i, i, j, j]
 
-        ind_list = [(i1, i2) for i1 in range(4) for i2 in range(i1 + 1)]
+        ind_list = [(i1, i2) for i1 in range(4) for i2 in range(i1 + 1, 4)]
         A2 = np.zeros((4, 6))
         A3 = np.zeros((6, 4))
         for i in range(4):
