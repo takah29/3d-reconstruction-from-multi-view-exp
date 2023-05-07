@@ -4,6 +4,8 @@ from typing import Tuple
 import numpy as np
 import numpy.typing as npt
 
+from .utils import unit_vec
+
 
 def _get_observation_matrix(*data_list):
     """観測行列と各画像の重心ベクトルを計算する
@@ -450,6 +452,32 @@ def _reconstruct_3d(P: npt.NDArray, S: npt.NDArray, K: npt.NDArray, H: npt.NDArr
     return X, R, t
 
 
+def _predict_scene_pose(R, t):
+    pred_x_axis = unit_vec(R[:, :, 0].mean(axis=0))
+    world_z_axis = np.array([0.0, 0.0, 1.0])
+    pred_y_axis = unit_vec(np.cross(world_z_axis, pred_x_axis))
+    pred_z_axis = unit_vec(np.cross(pred_x_axis, pred_y_axis))
+    R_ = np.vstack((pred_x_axis, pred_y_axis, pred_z_axis)).T
+    t_ = t.mean(axis=0)
+
+    return R_, t_
+
+
+def _correct_world_coordinates(X, R, t, method="first_camera"):
+    if method == "first_camera":
+        R_ = R[0]
+        t_ = t[0]
+    elif method == "predict":
+        R_, t_ = _predict_scene_pose(R, t)
+    else:
+        raise ValueError()
+
+    X = (X - t_) @ R_
+    R = R_.T @ R
+    t = (t - t_) @ R_
+
+    return X, R, t
+
 
 def perspective_self_calibration(x_list, f0, method="primary"):
     x = _create_data_matrix(x_list, f0)
@@ -468,5 +496,6 @@ def perspective_self_calibration(x_list, f0, method="primary"):
     P = M.reshape(-1, 3, 4)
     H, K = _euclidean_upgrading(P, f0)
     X, R, t = _reconstruct_3d(P, S, K, H)
+    X, R, t = _correct_world_coordinates(X, R, t, method="predict")
 
     return X, R, t
