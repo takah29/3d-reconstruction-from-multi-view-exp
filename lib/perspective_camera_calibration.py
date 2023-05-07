@@ -41,11 +41,11 @@ def _get_initial_inner_camera_params(n_images, f0):
 
 def _create_data_matrix(x_list, f0):
     # (n_images, n_points, 3)
-    X = np.asarray([np.hstack((x / f0, np.ones((x.shape[0], 1)))) for x in x_list])
+    x = np.asarray([np.hstack((x / f0, np.ones((x.shape[0], 1)))) for x in x_list])
     # (n_points, n_images, 3)
-    X = X.transpose(1, 0, 2)
+    x = x.transpose(1, 0, 2)
 
-    return X
+    return x
 
 
 def _compute_reprojection_error(X, M, S, f0):
@@ -67,7 +67,7 @@ def _compute_reprojection_error(X, M, S, f0):
 
 
 def _compute_projective_depth_primary_method(
-    X, f0: float, tolerance: float = 2.0, max_iter: int = 100
+    x, f0: float, tolerance: float = 2.0, max_iter: int = 100
 ) -> npt.NDArray:
     """データXから基本法で射影的奥行きzを求める
 
@@ -78,15 +78,15 @@ def _compute_projective_depth_primary_method(
     Returns:
         npt.NDArray: 射影的奥行き, z.shape = (n_images, n_feature_points)
     """
-    n_points = X.shape[0]
-    n_images = X.shape[1]
+    n_points = x.shape[0]
+    n_images = x.shape[1]
 
     z = np.ones((n_points, n_images))
 
     count = 0
     while True:
         # (n_points, n_images, 3) * (n_points, n_images, 1) -> (n_points, n_images, 3)
-        W = X * z[..., np.newaxis]
+        W = x * z[..., np.newaxis]
 
         # Wの各列を単位ベクトルにする
         # (n_points, n_images, 3) / (n_points, 1, 1) -> (n_points, n_images, 3)
@@ -100,17 +100,17 @@ def _compute_projective_depth_primary_method(
 
         # (n_points, 1, n_images, 1, 3) @ (1, 4, n_images, 3, 1) -> (n_points, 4, n_images, 1, 1)
         # -> (n_points, 4, n_images)
-        x_dot_u = (X[:, np.newaxis, :, np.newaxis, :] @ U_[np.newaxis, ..., np.newaxis]).squeeze()
+        x_dot_u = (x[:, np.newaxis, :, np.newaxis, :] @ U_[np.newaxis, ..., np.newaxis]).squeeze()
 
         # (n_points, 4, n_images, 1) @ (n_points, 4, 1, n_images)
         # -> (n_points, 4, n_images, n_images) -> (n_points, n_images, n_images)
         denom = (x_dot_u[..., np.newaxis] @ x_dot_u[:, :, np.newaxis]).sum(axis=1)
 
         # (n_points, n_images)
-        X_norm = np.linalg.norm(X, axis=2)
+        x_norm = np.linalg.norm(x, axis=2)
 
         # (n_points, n_images, 1) @ (n_points, 1, n_images) -> (n_points, n_images, n_images)
-        num = X_norm[..., np.newaxis] @ X_norm[:, np.newaxis]
+        num = x_norm[..., np.newaxis] @ x_norm[:, np.newaxis]
 
         # (n_points, n_images, n_images) / (n_points, n_images, n_images)
         # -> (n_points, n_images, n_images)
@@ -133,12 +133,12 @@ def _compute_projective_depth_primary_method(
         xi[xi.sum(axis=1) < 0] *= -1
 
         # (n_points, n_images) / (n_points, n_images) -> (n_points, n_images)
-        z[...] = xi / X_norm
+        z[...] = xi / x_norm
 
         M = U_.transpose(1, 2, 0).reshape(-1, 4)
         S = np.diag(Sigma[:4]) @ Vt[:4]
 
-        E = _compute_reprojection_error(X, M, S, f0)
+        E = _compute_reprojection_error(x, M, S, f0)
 
         count += 1
 
@@ -152,7 +152,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    X, f0: float, tolerance: float = 2.0, max_iter: int = 100
+    x, f0: float, tolerance: float = 2.0, max_iter: int = 100
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
@@ -163,22 +163,22 @@ def _compute_projective_depth_dual_method(
     Returns:
         npt.NDArray: 射影的奥行き, z.shape = (n_images, n_feature_points)
     """
-    n_points = X.shape[0]
-    n_images = X.shape[1]
+    n_points = x.shape[0]
+    n_images = x.shape[1]
 
     z = np.ones((n_points, n_images))
 
     count = 0
     while True:
         # (n_points, n_images, 3) * (n_points, n_images, 1) -> (n_points, n_images, 3)
-        W = X * z[..., np.newaxis]
+        W = x * z[..., np.newaxis]
 
         # Wの各列を単位ベクトルにする
         # (n_images, 3, n_points)
-        X = X.transpose(1, 2, 0)
+        x = x.transpose(1, 2, 0)
         # (n_images, 3, n_points) / (n_images, 1, 1) -> (n_images, 3, n_points)
         # -> (n_points, n_images, 3)
-        W = (X / (np.linalg.norm(X, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]).transpose(
+        W = (x / (np.linalg.norm(x, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]).transpose(
             2, 0, 1
         )
 
@@ -191,16 +191,16 @@ def _compute_projective_depth_dual_method(
         V_gram_mat = V_ @ V_.T
 
         # (n_images, n_points, 3) @ (n_images, 3, n_points) -> (n_images, n_points, n_points)
-        X_gram_mat = X.transpose(0, 2, 1) @ X
+        x_gram_mat = x.transpose(0, 2, 1) @ x
 
         # (n_points, n_points) @ (n_images, n_points, n_points) -> (n_images, n_points, n_points)
-        denom = V_gram_mat * X_gram_mat
+        denom = V_gram_mat * x_gram_mat
 
         # (n_images, 3, n_points) -> (n_images, n_points)
-        X_norm = np.linalg.norm(X, axis=1)
+        x_norm = np.linalg.norm(x, axis=1)
 
         # (n_images, n_points, 1) @ (n_images, 1, n_points) -> (n_images, n_points, n_points)
-        num = X_norm[..., np.newaxis] @ X_norm[:, np.newaxis]
+        num = x_norm[..., np.newaxis] @ x_norm[:, np.newaxis]
 
         # (n_images, n_points, n_points) / (n_images, n_points, n_points)
         # -> (n_images, n_points, n_points)
@@ -223,11 +223,11 @@ def _compute_projective_depth_dual_method(
         xi[xi.sum(axis=1) < 0] *= -1
 
         # (n_points, n_images) / (n_points, n_images) -> (n_points, n_images)
-        z[...] = xi / X_norm.T
+        z[...] = xi / x_norm.T
 
         M = U[:, :4]
         S = np.diag(Sigma[:4]) @ V_.T
-        E = _compute_reprojection_error(X.transpose(2, 0, 1), M, S, f0)
+        E = _compute_reprojection_error(x.transpose(2, 0, 1), M, S, f0)
 
         count += 1
 
@@ -413,25 +413,31 @@ def _euclidean_upgrading(P: npt.NDArray, f0: float):
     return H, K
 
 
+def _reconstruct_3d(P: npt.NDArray, S: npt.NDArray, K: npt.NDArray, H: npt.NDArray):
+
+    X = (np.linalg.inv(H) @ S).T
+    X = X[:, :3] / X[:, -1:]
+
+    return X
+
+
 def perspective_self_calibration(x_list, f0, method="primary"):
-    X = _create_data_matrix(x_list, f0)
+    x = _create_data_matrix(x_list, f0)
 
     if method == "primary":
-        z = _compute_projective_depth_primary_method(X, f0)
+        z = _compute_projective_depth_primary_method(x, f0)
     elif method == "dual":
-        z = _compute_projective_depth_dual_method(X, f0)
+        z = _compute_projective_depth_dual_method(x, f0)
     else:
         raise ValueError()
 
     # (n_points, n_images, 3) * (n_points, n_images, 1) -> (n_points, n_images, 3)
-    W = X * z[..., np.newaxis]
+    W = x * z[..., np.newaxis]
 
     M, S = factorization_method(W.reshape(W.shape[0], -1).T)
 
     P = M.reshape(-1, 3, 4)
     H, K = _euclidean_upgrading(P, f0)
+    X = _reconstruct_3d(P, S, K, H)
 
-    X_ = (np.linalg.inv(H) @ S).T
-    X_ = X_[:, :3] / X_[:, -1:]
-
-    return X_
+    return X
