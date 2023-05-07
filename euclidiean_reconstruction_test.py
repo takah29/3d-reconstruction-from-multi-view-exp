@@ -1,7 +1,7 @@
 import numpy as np
 
 from lib.camera import Camera
-from lib.perspective_camera_calibration import reconstruct_3d
+from lib.perspective_camera_calibration import perspective_self_calibration
 from lib.utils import sample_hemisphere_points, set_points1
 from lib.visualization import ThreeDimensionalPlotter, TwoDimensionalMatrixPlotter
 
@@ -36,9 +36,7 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    M, S = reconstruct_3d(x_list, 1.0)
-    X_ = (S[:3] / S[-1]).T
-    # X_, R_ = paraperspective_self_calibration(x_list, f * np.ones(image_num))
+    X_ = perspective_self_calibration(x_list, 1.0)
 
     # 3次元点の表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))

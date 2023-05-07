@@ -18,8 +18,8 @@ def factorization_method(
 
 
 def _get_initial_inner_camera_params(n_images, f0):
-    """初期内部カメラパラメータ行列作成する"""
-    return np.tile(np.eye(3), (n_images, 1, 1))
+    """初期内部カメラパラメータ行列Kを作成する"""
+    return np.tile(np.eye(3) * f0, (n_images, 1, 1))
 
 
 def _create_data_matrix(x_list, f0):
@@ -231,10 +231,84 @@ def _calc_omega(Q):
     else:
         raise ValueError()
 
-    return Omega
+    return Omega, sigma, w
 
 
-def reconstruct_3d(x_list, f0):
+def _update_K(K, Omega, Q):
+    """内部カメラパラメータKを更新する"""
+    # (n_images, 3, 4) @ (4, 4) @ (n_images, 4, 3) -> (n_images, 3, 3)
+    C = Q @ Omega @ Q.transpose(0, 2, 1)
+
+    # (n_images, )
+    F = (
+        (C[:, 0, 0] + C[:, 1, 1]) / C[:, 2, 2]
+        - (C[:, 0, 2] / C[:, 2, 2]) ** 2
+        - (C[:, 1, 2] / C[:, 2, 2]) ** 2
+    )
+
+    J = np.full(F.shape, np.inf)
+    is_updatable = (C[:, 2, 2] > 0) & (F > 0)
+    if is_updatable.any():
+        delta_u0 = C[:, 0, 2] / C[:, 2, 2]
+        delta_v0 = C[:, 1, 2] / C[:, 2, 2]
+        delta_f = np.sqrt(
+            0.5 * ((C[:, 0, 0] + C[:, 1, 1]) / C[:, 2, 2] - delta_u0**2 - delta_v0**2)
+        )
+
+        delta_K = np.zeros((3, 3, delta_f.shape[0]))
+        delta_K[(0, 1), (0, 1)] = delta_f
+        delta_K[0, 2] = delta_u0
+        delta_K[1, 2] = delta_v0
+        delta_K[2, 2] = 1
+        delta_K = delta_K.transpose(2, 0, 1)
+
+        # (n_images, 3, 3) @ (n_images, 3, 3) -> (n_images, 3, 3)
+        K = delta_K @ K
+
+        # (n_images, ) * (n_images, 3, 3)
+        K = np.sqrt(C[:, 2, 2])[:, np.newaxis, np.newaxis] * K
+
+        J[is_updatable] = (
+            (C[:, 0, 0] / C[:, 2, 2] - 1) ** 2
+            + (C[:, 1, 1] / C[:, 2, 2]) ** 2
+            + 2 * (C[:, 0, 1] ** 2 + C[:, 1, 2] ** 2 + C[:, 2, 0] ** 2) / C[:, 2, 2] ** 2
+        )[is_updatable]
+
+    return K, J
+
+
+def _euclidean_upgrading(P: npt.NDArray, f0: float):
+    n_images = P.shape[0]
+    J_med_ = np.inf
+    K = _get_initial_inner_camera_params(n_images, f0)
+
+    while True:
+        # (n_images, 3, 3) @ (n_images, 3, 4) -> (n_images, 3, 4)
+        Q = np.linalg.inv(K) @ P
+
+        Omega, omega_eigval, omega_eigvec = _calc_omega(Q)
+
+        if omega_eigval[2] > 0:
+            coef = np.hstack((omega_eigval[:3], [1.0]))
+            H = (coef[:, np.newaxis] * omega_eigvec).T
+        elif omega_eigval[1] < 0:
+            coef = np.hstack(([1.0], np.sqrt(-omega_eigval[1:])))
+            H = (coef[:, np.newaxis] * omega_eigvec)[::-1].T
+        else:
+            raise ValueError()
+
+        K, J = _update_K(K, Omega, Q)
+        J_med = np.median(J)
+
+        if J_med < 1e-8 or J_med >= J_med_:
+            break
+
+        J_med_ = J_med
+
+    return H, K
+
+
+def perspective_self_calibration(x_list, f0):
     X = _create_data_matrix(x_list, f0)
     z = _compute_projective_depth(X, f0)
 
@@ -243,4 +317,10 @@ def reconstruct_3d(x_list, f0):
 
     M, S = factorization_method(W.reshape(W.shape[0], -1).T)
 
-    return M, S
+    P = M.reshape(-1, 3, 4)
+    H, K = _euclidean_upgrading(P, f0)
+
+    X_ = (np.linalg.inv(H) @ S).T
+    X_ = X_[:, :3] / X_[:, -1:]
+
+    return X_
