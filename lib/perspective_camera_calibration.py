@@ -189,7 +189,6 @@ def _calc_omega(Q):
                 A4[i, j] = 2 * A_cal[i1, i2, j1, j2]
 
         A = np.block([[A1, A2], [A3, A4]])
-        print(A.shape)
 
         return A
 
@@ -263,15 +262,15 @@ def _update_K(K, Omega, Q):
         delta_K = delta_K.transpose(2, 0, 1)
 
         # (n_images, 3, 3) @ (n_images, 3, 3) -> (n_images, 3, 3)
-        K = delta_K @ K
+        K = K @ delta_K
 
         # (n_images, ) * (n_images, 3, 3)
         K = np.sqrt(C[:, 2, 2])[:, np.newaxis, np.newaxis] * K
 
         J[is_updatable] = (
             (C[:, 0, 0] / C[:, 2, 2] - 1) ** 2
-            + (C[:, 1, 1] / C[:, 2, 2]) ** 2
-            + 2 * (C[:, 0, 1] ** 2 + C[:, 1, 2] ** 2 + C[:, 2, 0] ** 2) / C[:, 2, 2] ** 2
+            + (C[:, 1, 1] / C[:, 2, 2] - 1) ** 2
+            + 2 * (C[:, 0, 1] ** 2 + C[:, 1, 2] ** 2 + C[:, 2, 0] ** 2) / (C[:, 2, 2] ** 2)
         )[is_updatable]
 
     return K, J
@@ -289,7 +288,7 @@ def _euclidean_upgrading(P: npt.NDArray, f0: float):
         Omega, omega_eigval, omega_eigvec = _calc_omega(Q)
 
         if omega_eigval[2] > 0:
-            coef = np.hstack((omega_eigval[:3], [1.0]))
+            coef = np.hstack((np.sqrt(omega_eigval[:3]), [1.0]))
             H = (coef[:, np.newaxis] * omega_eigvec).T
         elif omega_eigval[1] < 0:
             coef = np.hstack(([1.0], np.sqrt(-omega_eigval[1:])))
