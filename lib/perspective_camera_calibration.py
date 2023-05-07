@@ -155,7 +155,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    x, f0: float, tolerance: float, max_iter: int = 10
+    x, f0: float, tolerance: float, max_iter: int = 100
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
@@ -176,13 +176,14 @@ def _compute_projective_depth_dual_method(
         # (n_points, n_images, 3) * (n_points, n_images, 1) -> (n_points, n_images, 3)
         W = x * z[..., np.newaxis]
 
-        # Wの各列を単位ベクトルにする
         # (n_images, 3, n_points)
+        Wt = W.transpose(1, 2, 0)
         xt = x.transpose(1, 2, 0)
+
         # (n_images, 3, n_points) / (n_images, 1, 1) -> (n_images, 3, n_points)
         # -> (n_points, n_images, 3)
         W = (
-            xt / (np.linalg.norm(xt, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]
+            Wt / (np.linalg.norm(Wt, axis=2) ** 2).sum(axis=1)[:, np.newaxis, np.newaxis]
         ).transpose(2, 0, 1)
 
         U, Sigma, Vt = np.linalg.svd(W.reshape(n_points, -1).T)
