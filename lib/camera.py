@@ -35,8 +35,8 @@ class Camera:
     def _calc_pose(self):
         world_top = np.array([1.0, 0.0, 0.0])
         camera_z = self.d
-        camera_y = np.cross(camera_z, world_top)  # camera right
-        camera_x = np.cross(camera_y, camera_z)  # camera up
+        camera_y = unit_vec(np.cross(camera_z, world_top))  # camera right
+        camera_x = unit_vec(np.cross(camera_y, camera_z))  # camera up
         R = np.vstack((camera_x, camera_y, camera_z)).T
         t = self.o
         return R, t
