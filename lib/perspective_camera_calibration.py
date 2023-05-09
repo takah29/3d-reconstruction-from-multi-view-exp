@@ -119,7 +119,7 @@ def _compute_projective_depth_primary_method(
         A = denom / num
 
         # (n_points, n_images), (n_points, n_images, n_images)
-        eigvals, eigvecs = np.linalg.eig(A)
+        eigvals, eigvecs = np.linalg.eigh(A)
 
         # (n_points, n_images) -> (n_points, )
         max_eigvals_ind = np.argmax(eigvals, axis=1)
@@ -211,7 +211,7 @@ def _compute_projective_depth_dual_method(
         B = denom / num
 
         # (n_images, n_points), (n_images, n_points, n_points)
-        eigvals, eigvecs = np.linalg.eig(B)
+        eigvals, eigvecs = np.linalg.eigh(B)
 
         # (n_images, n_points) -> (n_images, )
         max_eigvals_ind = np.argmax(eigvals, axis=1)
