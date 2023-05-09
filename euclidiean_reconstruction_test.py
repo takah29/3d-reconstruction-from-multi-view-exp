@@ -29,8 +29,8 @@ def main():
         x_list.append(x)
 
     # ノイズの追加
-    for x in x_list:
-        x += 0.005 * np.random.randn(*x.shape)
+    # for x in x_list:
+    #     x += 0.005 * np.random.randn(*x.shape)
 
     camera_poses = []
     for camera in cameras:
@@ -57,7 +57,7 @@ def main():
             # camera(i * j)で射影した2次元データ点のプロット
             plotter_2d.select(n_col * i + j)
             plotter_2d.set_property(f"Camera {n_row * i + j + 1}", (-1, 1), (-1, 1))
-            plotter_2d.plot_points(x_list[n_row * i + j], color="black")
+            plotter_2d.plot_points(x_list[n_col * i + j], color="black")
     plotter_2d.show()
     plotter_2d.close()
 

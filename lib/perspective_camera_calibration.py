@@ -155,7 +155,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    x, f0: float, tolerance: float, max_iter: int = 10
+    x, f0: float, tolerance: float, max_iter: int = 30
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
