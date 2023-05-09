@@ -57,7 +57,7 @@ def _compute_reprojection_error(x, M, S, f0):
     PX = (M @ S).reshape(-1, 3, S.shape[1]).transpose(2, 0, 1)
 
     # 第3成分を1にする正規化 (a, b, c) -> (a/c, b/c, 1) を行う
-    PX = np.apply_along_axis(lambda x: x / x[2], 2, PX)
+    PX = np.apply_along_axis(lambda p: p / p[2], 2, PX)
 
     x_minus_PX = x - PX
 
@@ -155,7 +155,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    x, f0: float, tolerance: float, max_iter: int = 100
+    x, f0: float, tolerance: float, max_iter: int = 10
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
@@ -486,7 +486,7 @@ def perspective_self_calibration(x_list, f0=1.0, tol=0.01, method="primary"):
     """透視投影カメラモデルによるカメラの自己校正
 
     ・f0とtolはx_listのデータのスケールから決定する
-    　デフォルト値はデータ分布が[-1, 1]範囲内にあるときの目安
+      デフォルト値はデータ分布が[-1, 1]範囲内にあるときの目安
     """
     x = _create_data_matrix(x_list, f0)
 
