@@ -41,7 +41,7 @@ def orthographic_self_calibration(
     B_cal = _create_B_cal(U_)
 
     B = _get_B(B_cal)
-    tau = np.linalg.inv(B) @ np.array([1, 1, 1, 0, 0, 0])
+    tau = np.linalg.solve(B, np.array([1, 1, 1, 0, 0, 0]))
     T = _get_T(tau)
 
     if np.linalg.det(T) < 0:
