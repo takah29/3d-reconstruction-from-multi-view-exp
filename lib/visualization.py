@@ -12,6 +12,7 @@ class ThreeDimensionalPlotter:
         self.ax.set_xlabel("Y")
         self.ax.set_ylabel("Z")
         self.ax.set_zlabel("X")
+        self.ax.set_box_aspect((1, 1, 1))
 
     def set_lim(self, xlim=[-5.0, 5.0], ylim=[-5.0, 5.0], zlim=[-5.0, 5.0]):
         self.ax.set_xlim3d(ylim)
@@ -41,7 +42,7 @@ class ThreeDimensionalPlotter:
         if label is not None:
             self.ax.text(pos[1], pos[2], pos[0], label)
 
-    def plot_points(self, X: NDArray, color="black") -> None:
+    def plot_points(self, X: NDArray, color: str | list = "black") -> None:
         """3次元点群をプロットする、colorはリストで与えても良い"""
         self.ax.scatter(X[:, 1], X[:, 2], X[:, 0], c=color, marker="o")
 
@@ -67,6 +68,7 @@ class TwoDimensionalMatrixPlotter:
 
     def set_property(self, title, xlim=[-1.0, 1.0], ylim=[-1.0, 1.0]):
         self.current_ax.set_title(title)
+        self.current_ax.set_aspect("equal")
         self.current_ax.set_xlim(ylim)
         self.current_ax.set_ylim(xlim)
         if self.is_grid:
