@@ -155,7 +155,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    x, f0: float, tolerance: float, max_iter: int = 30
+    x, f0: float, tolerance: float, max_iter: int = 50
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
@@ -538,4 +538,4 @@ def perspective_self_calibration(x_list, f0=1.0, tol=0.01, method="primary"):
 
     X, R, t = _correct_world_coordinates(X, R, t, method="predict")
 
-    return X, R, t
+    return X, R, t, K
