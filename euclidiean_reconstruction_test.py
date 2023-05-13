@@ -36,7 +36,7 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_, t_ = perspective_self_calibration(x_list, 1.0, tol=1e-8, method="dual")
+    X_, R_, t_ = perspective_self_calibration(x_list, 1.0, tol=1e-10, method="dual")
 
     # 3次元点の表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
@@ -56,7 +56,7 @@ def main():
         for j in range_width:
             # camera(i * j)で射影した2次元データ点のプロット
             plotter_2d.select(n_col * i + j)
-            plotter_2d.set_property(f"Camera {n_row * i + j + 1}", (-1, 1), (-1, 1))
+            plotter_2d.set_property(f"Camera {n_row * i + j + 1}", (-0.5, 0.5), (-0.5, 0.5))
             plotter_2d.plot_points(x_list[n_col * i + j], color="black")
     plotter_2d.show()
     plotter_2d.close()
