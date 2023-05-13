@@ -36,8 +36,8 @@ def factorization_method(
     return M, S
 
 
-def _get_initial_inner_camera_params(n_images, f0):
-    """初期内部カメラパラメータ行列Kを作成する"""
+def _get_initial_intrinsic_params(n_images, f0):
+    """初期内部パラメータ行列Kを作成する"""
     return np.tile(np.eye(3) * f0, (n_images, 1, 1))
 
 
@@ -390,7 +390,7 @@ def _update_K(K, Omega, Q):
 def _euclidean_upgrading(P: npt.NDArray, f0: float):
     n_images = P.shape[0]
     J_med_ = np.inf
-    K = _get_initial_inner_camera_params(n_images, f0)
+    K = _get_initial_intrinsic_params(n_images, f0)
 
     while True:
         # (n_images, 3, 3) @ (n_images, 3, 4) -> (n_images, 3, 4)
