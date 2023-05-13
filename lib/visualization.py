@@ -74,9 +74,11 @@ class TwoDimensionalMatrixPlotter:
         if self.is_grid:
             self.current_ax.grid()
 
-    def plot_points(self, x: NDArray, color="black") -> None:
+    def plot_points(self, x: NDArray, color="black", label=None) -> None:
         """2次元点群をプロットする、colorはリストで与えても良い"""
-        self.current_ax.scatter(x[:, 1], x[:, 0], c=color, marker=".")
+        self.current_ax.scatter(x[:, 1], x[:, 0], c=color, marker=".", label=label)
+        if label is not None:
+            self.current_ax.legend()
 
     def show(self):
         """2次元グラフを表示する"""
