@@ -455,31 +455,62 @@ def _reconstruct_3d(P: npt.NDArray, S: npt.NDArray, K: npt.NDArray, H: npt.NDArr
     return X, R, t
 
 
-def _predict_scene_pose(R, t):
+def _predict_world_axis(
+    X: npt.NDArray, R: npt.NDArray, t: npt.NDArray
+) -> Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    """
+
+    Args:
+        R (_type_): _description_
+        t (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     pred_x_axis = unit_vec(R[:, :, 0].mean(axis=0))
     world_z_axis = np.array([0.0, 0.0, 1.0])
     pred_y_axis = unit_vec(np.cross(world_z_axis, pred_x_axis))
     pred_z_axis = unit_vec(np.cross(pred_x_axis, pred_y_axis))
-    R_ = np.vstack((pred_x_axis, pred_y_axis, pred_z_axis)).T
-    t_ = t.mean(axis=0)
+    R_pred = np.vstack((pred_x_axis, pred_y_axis, pred_z_axis)).T
+    t_pred = t.mean(axis=0)
 
-    return R_, t_
+    X_ = (X - t_pred) @ R_pred
+    R_ = R_pred.T @ R
+    t_ = (t - t_pred) @ R_pred
+
+    return X_, R_, t_
+
+
+def _normalize_world_axis_with_first_camera(
+    X: npt.NDArray, R: npt.NDArray, t: npt.NDArray
+) -> Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    """第1カメラを基準にシーンを正規化する
+
+    Args:
+        X (npt.NDArray): 3次元点
+        R (npt.NDArray): カメラの回転行列
+        t (npt.NDArray): カメラの並進
+    """
+
+    # (3, ) @ (3, 3) @ (3, 1) -> (3, )
+    s = np.array([0, 1, 0]) @ R[0].T @ (t[1] - t[0])[:, np.newaxis]
+
+    X_ = ((X - t[0]) @ R[0]) / s
+    R_ = R[0].T @ R
+    t_ = ((t - t[0]) @ R[0]) / s
+
+    return X_, R_, t_
 
 
 def _correct_world_coordinates(X, R, t, method="first_camera"):
     if method == "first_camera":
-        R_ = R[0]
-        t_ = t[0]
+        X_, R_, t_ = _normalize_world_axis_with_first_camera(X, R, t)
     elif method == "predict":
-        R_, t_ = _predict_scene_pose(R, t)
+        X_, R_, t_ = _predict_world_axis(X, R, t)
     else:
         raise ValueError()
 
-    X = (X - t_) @ R_
-    R = R_.T @ R
-    t = (t - t_) @ R_
-
-    return X, R, t
+    return X_, R_, t_
 
 
 def perspective_self_calibration(x_list, f0=1.0, tol=0.01, method="primary"):
@@ -504,6 +535,7 @@ def perspective_self_calibration(x_list, f0=1.0, tol=0.01, method="primary"):
     P = M.reshape(-1, 3, 4)
     H, K = _euclidean_upgrading(P, f0)
     X, R, t = _reconstruct_3d(P, S, K, H)
+
     X, R, t = _correct_world_coordinates(X, R, t, method="predict")
 
     return X, R, t
