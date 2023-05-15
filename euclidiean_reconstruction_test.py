@@ -2,6 +2,7 @@ import numpy as np
 
 from lib.camera import Camera
 from lib.perspective_camera_calibration import perspective_self_calibration
+from lib.bundle_adjustment import BundleAdjuster
 from lib.utils import sample_hemisphere_points, set_points1
 from lib.visualization import ThreeDimensionalPlotter, TwoDimensionalMatrixPlotter
 
@@ -36,7 +37,7 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-8, method="dual")
+    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-2, method="dual")
 
     # シーンデータの表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
@@ -60,6 +61,31 @@ def main():
     cameras_ = []
     for R_pred, t_pred, K_pred in zip(R_, t_, K_):
         cameras_.append(Camera(R_pred, t_pred, K_pred))
+
+    x_list_ = []
+    for camera in cameras_:
+        x = camera.project_points(X_, method="perspective")
+        x_list_.append(x)
+
+    n_col = 6
+    n_row = (n_images - 1) // n_col + 1
+    plotter_2d = TwoDimensionalMatrixPlotter(n_row, n_col, (20, 6))
+    for i in range(n_row):
+        range_width = range(n_images % n_col) if i == n_images // n_col else range(n_col)
+        for j in range_width:
+            # camera(i * j)で射影した2次元データ点のプロット
+            plotter_2d.select(n_col * i + j)
+            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", (-0.5, 0.5), (-0.5, 0.5))
+
+            plotter_2d.plot_points(x_list[n_col * i + j], color="green", label="Projection")
+            plotter_2d.plot_points(x_list_[n_col * i + j], color="red", label="Reprojection")
+
+    plotter_2d.show()
+    plotter_2d.close()
+
+    print("Bundle Adjustment")
+    bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
+    X_, K_, R_, t_ = bundle_adjuster.optimize(tol=1e-8)
 
     x_list_ = []
     for camera in cameras_:

@@ -31,12 +31,15 @@ class BundleAdjuster:
     def optimize(self, tol):
         """再投影誤差を最小化するX, K, R, tを求める"""
         c = 0.0001
+        K = self._get_K(self._f, self._u)
+        P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
+        E = self._calc_reprojection_error(p, q, r)
 
         while True:
             K = self._get_K(self._f, self._u)
             P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
 
-            E = self._calc_reprojection_error(p, q, r)
+            # E = self._calc_reprojection_error(p, q, r)
 
             dpdX, dqdX, drdX = self._calc_X_diff_pqr(P)
             dp_domega, dq_domega, dr_domega = self._calc_camera_params_diff_pqr(p, q, r)
@@ -81,12 +84,9 @@ class BundleAdjuster:
 
                 # (n_points, 3, 3) @
                 # ((n_points, 3, 9 * n_images - 7) @ (9 * n_images - 7, 1) + (n_points, 3, 1))
-                # + (n_points, 3, 1)
                 # -> (n_points, 3, 1)
                 # -> (n_points, 3)
-                delta_X = -(
-                    matEinv @ (matF @ delta_xi_F[:, np.newaxis] + delta_X_E)
-                ).squeeze()
+                delta_X = -(matEinv @ (matF @ delta_xi_F[:, np.newaxis] + delta_X_E)).squeeze()
 
                 # パラメータの更新
                 tmp_X = self._update_X(delta_X)
@@ -95,8 +95,8 @@ class BundleAdjuster:
                 # 更新したパラメータで再投影誤差を計算する
                 tmp_K = self._get_K(tmp_f, tmp_u)
                 _, tmp_p, tmp_q, tmp_r = self._calc_pqr(tmp_X, tmp_K, tmp_R, tmp_t)
+
                 E_ = self._calc_reprojection_error(tmp_p, tmp_q, tmp_r)
-                print(E, E_)
 
                 if E_ > E:
                     c *= 10
@@ -157,7 +157,7 @@ class BundleAdjuster:
         # (n_images, 3, 3) @ (n_images, 3, 4) -> (n_images, 3, 4)
         P = K @ np.concatenate((Rt, -Rt @ t[..., np.newaxis]), axis=2)
 
-        # (n_images, 3, 4) @ (4, n_points) -> (n_images, 3, n_points) -> (3, n_points, n_images)
+        # (n_images, 3, 4) @ (1, 4, n_points) -> (n_images, 3, n_points) -> (3, n_points, n_images)
         p, q, r = (P @ X_ext.T[np.newaxis]).transpose(1, 2, 0)
 
         return P, p, q, r
@@ -202,7 +202,7 @@ class BundleAdjuster:
 
         # (n_points, n_images, 2)
         dpdu = np.stack((tmp, zero_array), axis=2)
-        dqdu = np.stack((np.zeros(tmp.shape), tmp), axis=2)
+        dqdu = np.stack((zero_array, tmp), axis=2)
         drdu = np.zeros(dpdu.shape)
 
         return dpdu, dqdu, drdu
@@ -215,14 +215,14 @@ class BundleAdjuster:
         for _ in range(self._n_points):
             # (n_images, 1) * (n_images, 3) + (n_images, 1) * (n_images, 3) -> (n_images, 3)
             dpdt.append(
-                self._f[..., np.newaxis] * self._R[:, :, 0] + self._u[:, :1] * self._R[:, :, 2]
+                -(self._f[:, np.newaxis] * self._R[:, :, 0] + self._u[:, :1] * self._R[:, :, 2])
             )
             dqdt.append(
-                self._f[..., np.newaxis] * self._R[:, :, 1] + self._u[:, -1:] * self._R[:, :, 2]
+                -(self._f[:, np.newaxis] * self._R[:, :, 1] + self._u[:, -1:] * self._R[:, :, 2])
             )
 
             # () * (n_images, 3) -> (n_images, 3)
-            drdt.append(self._f0 * self._R[:, :, 2])
+            drdt.append(-self._f0 * self._R[:, :, 2])
 
         # (n_points, n_images, 3)
         dpdt = np.stack(dpdt)
@@ -237,9 +237,9 @@ class BundleAdjuster:
         X_minus_t = self._X[:, np.newaxis] - self._t[np.newaxis]
 
         # (n_points, n_images, 3) x (n_points, n_images, 3) -> (n_points, n_images, 3)
-        dp_domega = np.cross(dpdt, X_minus_t)
-        dq_domega = np.cross(dqdt, X_minus_t)
-        dr_domega = np.cross(drdt, X_minus_t)
+        dp_domega = np.cross(-dpdt, X_minus_t)
+        dq_domega = np.cross(-dqdt, X_minus_t)
+        dr_domega = np.cross(-drdt, X_minus_t)
 
         return dp_domega, dq_domega, dr_domega
 
@@ -268,28 +268,28 @@ class BundleAdjuster:
         """誤差関数Eの3次元位置Xに関する微分d_Pを求める"""
         # (n_points, n_images) / (n_points, n_images) - (n_points, n_images) / ()
         # -> (n_points, n_images)
-        de1 = p / r - self._x[..., 0] / self._f0
+        d1 = p / r - self._x[..., 0] / self._f0
 
         # (n_points, n_images, 1) * (n_points, n_images, 3)
         # - (n_points, n_images, 1) * (n_points, n_images, 3)
         # -> (n_points, n_images, 3)
-        de2 = r[..., np.newaxis] * dpdX - p[..., np.newaxis] * drdX
+        d2 = r[..., np.newaxis] * dpdX - p[..., np.newaxis] * drdX
 
         # (n_points, n_images) / (n_points, n_images) - (n_points, n_images) / ()
         # -> (n_points, n_images)
-        de3 = q / r - self._x[..., 1] / self._f0
+        d3 = q / r - self._x[..., 1] / self._f0
 
         # (n_points, n_images, 1) * (n_points, n_images, 3)
         # - (n_points, n_images, 1) * (n_points, n_images, 3)
         # -> (n_points, n_images, 3)
-        de4 = r[..., np.newaxis] * dqdX - q[..., np.newaxis] * drdX
+        d4 = r[..., np.newaxis] * dqdX - q[..., np.newaxis] * drdX
 
         # (n_points, n_images, 3)
-        de = de1[..., np.newaxis] * de2 + de3[..., np.newaxis] * de4
+        d = d1[..., np.newaxis] * d2 + d3[..., np.newaxis] * d4
 
         # (n_points, n_images, 3) / (n_points, n_images, 1)
         # -> (n_points, n_images, 3) -> (n_points, 3) -> (3 * n_points, )
-        d_P = 2 * (de / (r**2)[..., np.newaxis]).sum(axis=1).ravel()
+        d_P = 2 * (d / r[..., np.newaxis] ** 2).sum(axis=1).ravel()
 
         return d_P
 
@@ -320,11 +320,11 @@ class BundleAdjuster:
         # -> (n_points, n_images, 9) -> (n_images, 9) -> (9 * n_images, )
         d_F = 2 * (d / r[..., np.newaxis] ** 2).sum(axis=0).ravel()
 
-        included_arr = np.ones(d_F.shape, dtype=np.bool_)
-        included_arr[self._excluded_ind] = False
+        included_ind = np.ones(d_F.shape, dtype=np.bool_)
+        included_ind[self._excluded_ind] = False
 
         # (9 * n_images - 7, )
-        d_F = d_F[included_arr]
+        d_F = d_F[included_ind]
 
         return d_F
 
@@ -390,11 +390,11 @@ class BundleAdjuster:
         # (n_points, n_images, 3, 9) -> (n_points, 3, n_images, 9) -> (n_points, 3, 9 * n_images)
         matF = matF.transpose(0, 2, 1, 3).reshape(self._n_points, 3, -1)
 
-        included_arr = np.ones(matF.shape[2], dtype=np.bool_)
-        included_arr[self._excluded_ind] = False
+        included_ind = np.ones(matF.shape[2], dtype=np.bool_)
+        included_ind[self._excluded_ind] = False
 
         # (n_points, 3, 9 * n_images - 7)
-        matF = matF[:, :, included_arr]
+        matF = matF[:, :, included_ind]
 
         return matF
 
@@ -425,11 +425,11 @@ class BundleAdjuster:
         # (9 * n_images, 9 * n_images)
         matG = block_diag(*matG)
 
-        included_arr = np.ones(matG.shape[0], dtype=np.bool_)
-        included_arr[self._excluded_ind] = False
+        included_ind = np.ones(matG.shape[0], dtype=np.bool_)
+        included_ind[self._excluded_ind] = False
 
         # (9 * n_images - 7, 9 * n_images - 7)
-        matG = matG[included_arr][:, included_arr]
+        matG = matG[included_ind][:, included_ind]
 
         return matG
 
