@@ -7,6 +7,21 @@ def unit_vec(x: NDArray) -> NDArray:
     return x / np.linalg.norm(x)
 
 
+def get_rotation_matrix(omega: NDArray) -> NDArray:
+    """任意軸omegaに対する回転角norm(omega)から回転行列を求める"""
+    assert omega.shape == (3,)
+    omega_norm = np.linalg.norm(omega)
+
+    R1 = (1 - np.cos(omega_norm)) * np.ones((3, 3))
+    R2 = omega[:, np.newaxis] @ omega[:, np.newaxis].T
+    R3 = np.sin(omega_norm) * np.ones((3, 3))
+    R3[(0, 1, 2), (0, 1, 2)] = np.cos(omega_norm)
+    R4 = np.array([[1, -omega[2], omega[1]], [omega[2], 1, -omega[0]], [-omega[1], omega[0], 1]])
+    R = R1 * R2 + R3 * R4
+
+    return R
+
+
 def sample_normal_dist(scale: float, n: int):
     return np.random.normal(0, scale, (n, 3))
 
