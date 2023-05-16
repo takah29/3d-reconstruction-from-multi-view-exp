@@ -10,13 +10,20 @@ def unit_vec(x: NDArray) -> NDArray:
 def get_rotation_matrix(omega: NDArray) -> NDArray:
     """任意軸omegaに対する回転角norm(omega)から回転行列を求める"""
     assert omega.shape == (3,)
-    omega_norm = np.linalg.norm(omega)
 
-    R1 = (1 - np.cos(omega_norm)) * np.ones((3, 3))
-    R2 = omega[:, np.newaxis] @ omega[:, np.newaxis].T
-    R3 = np.sin(omega_norm) * np.ones((3, 3))
-    R3[(0, 1, 2), (0, 1, 2)] = np.cos(omega_norm)
-    R4 = np.array([[1, -omega[2], omega[1]], [omega[2], 1, -omega[0]], [-omega[1], omega[0], 1]])
+    if (omega == np.zeros(3)).all():
+        return np.eye(3)
+
+    rot_vec = unit_vec(omega)
+    rot_angle = np.linalg.norm(omega)
+
+    R1 = (1 - np.cos(rot_angle)) * np.ones((3, 3))
+    R2 = rot_vec[:, np.newaxis] @ rot_vec[np.newaxis]
+    R3 = np.sin(rot_angle) * np.ones((3, 3))
+    R3[(0, 1, 2), (0, 1, 2)] = np.cos(rot_angle)
+    R4 = np.array(
+        [[1, -rot_vec[2], rot_vec[1]], [rot_vec[2], 1, -rot_vec[0]], [-rot_vec[1], rot_vec[0], 1]]
+    )
     R = R1 * R2 + R3 * R4
 
     return R
