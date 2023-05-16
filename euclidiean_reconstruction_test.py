@@ -30,14 +30,14 @@ def main():
         x_list.append(x)
 
     # ノイズの追加
-    # for x in x_list:
-    #     x += 0.005 * np.random.randn(*x.shape)
+    for x in x_list:
+        x += 0.01 * np.random.randn(*x.shape)
 
     camera_poses = []
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-2, method="dual")
+    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-6, method="dual")
 
     # シーンデータの表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
@@ -85,7 +85,7 @@ def main():
 
     print("Bundle Adjustment")
     bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
-    X_, K_, R_, t_ = bundle_adjuster.optimize(convergence_threshold=1e-5)
+    X_, K_, R_, t_ = bundle_adjuster.optimize(convergence_threshold=1e-4)
 
     # バンドル調整後のシーンデータの表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
@@ -120,7 +120,6 @@ def main():
 
     plotter_2d.show()
     plotter_2d.close()
-
 
 if __name__ == "__main__":
     main()

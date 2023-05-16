@@ -1,4 +1,7 @@
-from .perspective_camera_calibration import _normalize_world_axis_with_first_camera
+from .perspective_camera_calibration import (
+    _normalize_world_axis_with_first_camera,
+    _predict_world_axis,
+)
 from .utils import get_rotation_matrix
 
 import numpy as np
@@ -122,7 +125,9 @@ class BundleAdjuster:
                 E = E_
                 c /= 10
 
-        return self._X, self._get_K(self._f, self._u), self._R, self._t
+        X_, R_, t_, = _predict_world_axis(self._X, self._R, self._t)
+
+        return X_, self._get_K(self._f, self._u), R_, t_
 
     def _update_X(self, delta_X):
         return self._X + delta_X
