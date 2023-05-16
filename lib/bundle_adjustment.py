@@ -28,18 +28,20 @@ class BundleAdjuster:
         # カメラパラメータ: (f1, u01, v01, t1_1, t1_2, t1_3, omega1_1, omega1_2, omega1_3, f2, u02, ...)
         self._excluded_ind = np.array([3, 4, 5, 6, 7, 8, 13])
 
-    def optimize(self, tol):
+        # 削除したカメラパラメータの要素を挿入するためのインデックス
+        self._insert_ind = np.array([3, 3, 3, 3, 3, 3, 7])
+
+    def optimize(self, convergence_threshold):
         """再投影誤差を最小化するX, K, R, tを求める"""
-        c = 0.0001
         K = self._get_K(self._f, self._u)
         P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
         E = self._calc_reprojection_error(p, q, r)
 
+        c = 0.0001
+        count = 0
         while True:
             K = self._get_K(self._f, self._u)
             P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
-
-            # E = self._calc_reprojection_error(p, q, r)
 
             dpdX, dqdX, drdX = self._calc_X_diff_pqr(P)
             dp_domega, dq_domega, dr_domega = self._calc_camera_params_diff_pqr(p, q, r)
@@ -109,8 +111,12 @@ class BundleAdjuster:
             self._t = tmp_t
             self._R = tmp_R
 
+            count += 1
+            reprojection_error_delta = np.abs(E_ - E)
+            print(f"Iteration {count}: reprojection_error_delta = {reprojection_error_delta}")
+
             # 再投影誤差が変化しなくなったら終了
-            if np.abs(E_ - E) <= tol:
+            if reprojection_error_delta <= convergence_threshold:
                 break
             else:
                 E = E_
@@ -123,7 +129,7 @@ class BundleAdjuster:
 
     def _update_camera_params(self, delta_xi_F):
         # (9 * n_images, )
-        delta_xi_F = np.insert(delta_xi_F, self._excluded_ind, np.zeros(self._excluded_ind.shape))
+        delta_xi_F = np.insert(delta_xi_F, self._insert_ind, np.zeros(self._insert_ind.shape))
 
         # (n_images, 9)
         delta_xi_F = delta_xi_F.reshape(self._n_images, 9)

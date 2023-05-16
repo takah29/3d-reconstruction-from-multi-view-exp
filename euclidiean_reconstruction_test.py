@@ -85,7 +85,20 @@ def main():
 
     print("Bundle Adjustment")
     bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
-    X_, K_, R_, t_ = bundle_adjuster.optimize(tol=1e-8)
+    X_, K_, R_, t_ = bundle_adjuster.optimize(convergence_threshold=1e-5)
+
+    # バンドル調整後のシーンデータの表示
+    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
+    plotter_3d.set_lim()
+    plotter_3d.plot_points(X_)
+    for i, (R, t) in enumerate(zip(R_, t_), start=1):
+        plotter_3d.plot_basis(R, t, label=f"Camera{i}")
+    plotter_3d.show()
+    plotter_3d.close()
+
+    cameras_ = []
+    for R_pred, t_pred, K_pred in zip(R_, t_, K_):
+        cameras_.append(Camera(R_pred, t_pred, K_pred))
 
     x_list_ = []
     for camera in cameras_:
