@@ -31,13 +31,13 @@ def main():
 
     # ノイズの追加
     for x in x_list:
-        x += 0.01 * np.random.randn(*x.shape)
+        x += 0.005 * np.random.randn(*x.shape)
 
     camera_poses = []
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-6, method="dual")
+    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-2, method="dual")
 
     # シーンデータの表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
