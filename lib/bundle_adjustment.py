@@ -34,11 +34,19 @@ class BundleAdjuster:
         # 削除したカメラパラメータの要素を挿入するためのインデックス
         self._insert_ind = np.array([3, 3, 3, 3, 3, 3, 7])
 
-    def optimize(self, convergence_threshold):
+        self._log = []
+
+    def optimize(self, convergence_threshold, is_debug=False):
         """再投影誤差を最小化するX, K, R, tを求める"""
         K = self._get_K(self._f, self._u)
         P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
         E = self._calc_reprojection_error(p, q, r)
+
+        if is_debug:
+            self._log.clear()
+            self._log.append(
+                {"points": self._X.copy(), "basis": self._R.copy(), "pos": self._t.copy()}
+            )
 
         c = 0.0001
         count = 0
@@ -114,6 +122,11 @@ class BundleAdjuster:
             self._t = tmp_t
             self._R = tmp_R
 
+            if is_debug:
+                self._log.append(
+                    {"points": self._X.copy(), "basis": self._R.copy(), "pos": self._t.copy()}
+                )
+
             count += 1
             reprojection_error_delta = np.abs(E_ - E)
             print(f"Iteration {count}: reprojection_error_delta = {reprojection_error_delta}")
@@ -125,9 +138,12 @@ class BundleAdjuster:
                 E = E_
                 c /= 10
 
-        X_, R_, t_, = _predict_world_axis(self._X, self._R, self._t)
+        X_, R_, t_ = _predict_world_axis(self._X, self._R, self._t)
 
         return X_, self._get_K(self._f, self._u), R_, t_
+
+    def get_log(self):
+        return self._log
 
     def _update_X(self, delta_X):
         return self._X + delta_X

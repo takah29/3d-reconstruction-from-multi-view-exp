@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 class ThreeDimensionalPlotter:
     def __init__(self, figsize=None, title=None):
         """Xを上、Zを奥行きとした右手系座標を設定する"""
-        plt.figure(figsize=figsize)
+        self.fig = plt.figure(figsize=figsize)
 
         self.ax = plt.axes(projection="3d")
         self.ax.set_title(title)
@@ -54,6 +54,9 @@ class ThreeDimensionalPlotter:
         plt.clf()
         plt.close()
 
+    def pause(self, s=0.1):
+        plt.pause(s)
+
 
 class TwoDimensionalMatrixPlotter:
     def __init__(self, n_row, n_col, figsize=None, is_grid=True):
@@ -87,6 +90,34 @@ class TwoDimensionalMatrixPlotter:
     def close(self):
         plt.clf()
         plt.close()
+
+
+def animate(data):
+    """基底と点群をアニメーションでプロットする
+
+    dataは以下のデータ構造を仮定する
+    data = [
+        {"points": X1, "basis": R1, "pos": t1}
+        {"points": X2, "basis": R2, "pos": t2}
+        ...
+        {"points": Xn, "basis": Rn, "pos": tn}
+    ]
+    """
+    plotter_3d = ThreeDimensionalPlotter()
+
+    while plt.fignum_exists(plotter_3d.fig.number):
+        for d in data:
+            X = d["points"]
+            R = d["basis"]
+            t = d["pos"]
+
+            plotter_3d.set_lim()
+            plotter_3d.plot_points(X)
+            for i, (R_, t_) in enumerate(zip(R, t), start=1):
+                plotter_3d.plot_basis(R_, t_, label=f"camera{i}")
+
+            plotter_3d.pause(0.05)
+            plotter_3d.ax.cla()
 
 
 if __name__ == "__main__":

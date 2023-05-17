@@ -4,14 +4,14 @@ from lib.camera import Camera
 from lib.perspective_camera_calibration import perspective_self_calibration
 from lib.bundle_adjustment import BundleAdjuster
 from lib.utils import sample_hemisphere_points, set_points1
-from lib.visualization import ThreeDimensionalPlotter, TwoDimensionalMatrixPlotter
+from lib.visualization import ThreeDimensionalPlotter, TwoDimensionalMatrixPlotter, animate
 
 
 def main():
     np.random.seed(123)
 
     f = 1.0
-    n_images = 12
+    n_images = 18
 
     # カメラの設定
     camera_pos = sample_hemisphere_points(n_images, 5)
@@ -37,7 +37,7 @@ def main():
     for camera in cameras:
         camera_poses.append((camera.get_pose()))
 
-    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-2, method="dual")
+    X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-3, method="dual")
 
     # シーンデータの表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
@@ -85,7 +85,8 @@ def main():
 
     print("Bundle Adjustment")
     bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
-    X_, K_, R_, t_ = bundle_adjuster.optimize(convergence_threshold=1e-4)
+    X_, K_, R_, t_ = bundle_adjuster.optimize(convergence_threshold=1e-3, is_debug=True)
+    data = bundle_adjuster.get_log()
 
     # バンドル調整後のシーンデータの表示
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
@@ -120,6 +121,8 @@ def main():
 
     plotter_2d.show()
     plotter_2d.close()
+
+    animate(data)
 
 if __name__ == "__main__":
     main()
