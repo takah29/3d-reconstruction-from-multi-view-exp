@@ -12,8 +12,8 @@ class Camera:
     def get_camera_matrix(self):
         return self._K @ np.hstack([self._R.T, -self._R.T @ self._t[:, np.newaxis]])
 
-    def get_pose(self):
-        return self._R, self._t
+    def get_parameters(self):
+        return self._K, self._R, self._t
 
     def project_points(self, X, method="perspective"):
         """3次元点を画像面に投影する"""
@@ -57,6 +57,33 @@ class Camera:
         K = np.diag((f, f, f0))
 
         return Camera(R, t, K)
+
+
+def calc_projected_points(X, K, R, t):
+    """すべてのカメラで投影点を求める"""
+    x_list = []
+    for R_pred, t_pred, K_pred in zip(R, t, K):
+        x = Camera(R_pred, t_pred, K_pred).project_points(X, method="perspective")
+        x_list.append(x)
+
+    return x_list
+
+
+def get_camera_parames(camera_list):
+    """カメラの内部パラメータと外部パラメータを取得する"""
+    K = []
+    R = []
+    t = []
+    for camera in camera_list:
+        K_, R_, t_ = camera.get_parameters()
+        K.append(K_)
+        R.append(R_)
+        t.append(t_)
+    K = np.stack(K)
+    R = np.stack(R)
+    t = np.stack(t)
+
+    return K, R, t
 
 
 if __name__ == "__main__":
