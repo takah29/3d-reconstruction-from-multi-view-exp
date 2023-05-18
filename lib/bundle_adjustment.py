@@ -36,7 +36,7 @@ class BundleAdjuster:
 
         self._log = []
 
-    def optimize(self, convergence_threshold, is_debug=False):
+    def optimize(self, delta_tol, scale_factor=10.0, is_debug=False):
         """再投影誤差を最小化するX, K, R, tを求める"""
         K = self._get_K(self._f, self._u)
         P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
@@ -112,7 +112,7 @@ class BundleAdjuster:
                 E_ = self._calc_reprojection_error(tmp_p, tmp_q, tmp_r)
 
                 if E_ > E:
-                    c *= 10
+                    c *= scale_factor
                 else:
                     break
 
@@ -132,11 +132,11 @@ class BundleAdjuster:
             print(f"Iteration {count}: reprojection_error_delta = {reprojection_error_delta}")
 
             # 再投影誤差が変化しなくなったら終了
-            if reprojection_error_delta <= convergence_threshold:
+            if reprojection_error_delta <= delta_tol:
                 break
             else:
                 E = E_
-                c /= 10
+                c /= scale_factor
 
         X_, R_, t_ = _predict_world_axis(self._X, self._R, self._t)
 

@@ -4,11 +4,7 @@ from lib.bundle_adjustment import BundleAdjuster
 from lib.camera import Camera, calc_projected_points, get_camera_parames
 from lib.perspective_camera_calibration import perspective_self_calibration
 from lib.utils import sample_hemisphere_points, set_points1
-from lib.visualization import (
-    animate,
-    show_2d_projection_data,
-    show_3d_scene_data,
-)
+from lib.visualization import animate, show_2d_projection_data, show_3d_scene_data
 
 
 def main():
@@ -52,7 +48,7 @@ def main():
     # バンドル調整
     print("Bundle Adjustment")
     bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
-    X_, K_, R_, t_ = bundle_adjuster.optimize(convergence_threshold=1e-3, is_debug=True)
+    X_, K_, R_, t_ = bundle_adjuster.optimize(delta_tol=1e-10, scale_factor=2.0, is_debug=True)
     data = bundle_adjuster.get_log()
 
     # バンドル調整後のシーンデータの表示
