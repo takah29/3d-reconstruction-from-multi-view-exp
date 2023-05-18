@@ -1,10 +1,16 @@
 import numpy as np
 
+from lib.bundle_adjustment import BundleAdjuster
 from lib.camera import Camera
 from lib.perspective_camera_calibration import perspective_self_calibration
-from lib.bundle_adjustment import BundleAdjuster
 from lib.utils import sample_hemisphere_points, set_points1
-from lib.visualization import ThreeDimensionalPlotter, TwoDimensionalMatrixPlotter, animate
+from lib.visualization import (
+    ThreeDimensionalPlotter,
+    TwoDimensionalMatrixPlotter,
+    animate,
+    show_2d_projection_data,
+    show_3d_scene_data,
+)
 
 
 def main():
@@ -21,67 +27,46 @@ def main():
         cameras.append(Camera.create(pos, target, f=f, f0=1.0))
 
     # データ点の設定
-    X = set_points1()
+    X_gt = set_points1()
 
     # 2次元画像平面へ射影
     x_list = []
     for camera in cameras:
-        x = camera.project_points(X, method="perspective")
+        x = camera.project_points(X_gt, method="perspective")
         x_list.append(x)
 
     # ノイズの追加
     for x in x_list:
         x += 0.005 * np.random.randn(*x.shape)
 
-    camera_poses = []
+    R_gt = []
+    t_gt = []
     for camera in cameras:
-        camera_poses.append((camera.get_pose()))
+        R_gt_, t_gt_ = camera.get_pose()
+        R_gt.append(R_gt_)
+        t_gt.append(t_gt_)
+    R_gt = np.stack(R_gt)
+    t_gt = np.stack(t_gt)
 
     X_, R_, t_, K_ = perspective_self_calibration(x_list, 1.0, tol=1e-3, method="dual")
 
     # シーンデータの表示
-    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
-    plotter_3d.set_lim()
-    plotter_3d.plot_points(X)
-    for i, camera_pose in enumerate(camera_poses, start=1):
-        plotter_3d.plot_basis(camera_pose[0], camera_pose[1], label=f"Camera{i}")
-    plotter_3d.show()
-    plotter_3d.close()
+    show_3d_scene_data(X_gt, R_gt, t_gt)
 
     # 復元したシーンデータの表示
-    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
-    plotter_3d.set_lim()
-    plotter_3d.plot_points(X_)
-    for i, (R, t) in enumerate(zip(R_, t_), start=1):
-        plotter_3d.plot_basis(R, t, label=f"Camera{i}")
-    plotter_3d.show()
-    plotter_3d.close()
+    show_3d_scene_data(X_, R_, t_)
 
     # 投影データと復元後の再投影データの表示
     cameras_ = []
     for R_pred, t_pred, K_pred in zip(R_, t_, K_):
         cameras_.append(Camera(R_pred, t_pred, K_pred))
 
-    x_list_ = []
+    reproj_x_list = []
     for camera in cameras_:
         x = camera.project_points(X_, method="perspective")
-        x_list_.append(x)
+        reproj_x_list.append(x)
 
-    n_col = 6
-    n_row = (n_images - 1) // n_col + 1
-    plotter_2d = TwoDimensionalMatrixPlotter(n_row, n_col, (20, 6))
-    for i in range(n_row):
-        range_width = range(n_images % n_col) if i == n_images // n_col else range(n_col)
-        for j in range_width:
-            # camera(i * j)で射影した2次元データ点のプロット
-            plotter_2d.select(n_col * i + j)
-            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", (-0.5, 0.5), (-0.5, 0.5))
-
-            plotter_2d.plot_points(x_list[n_col * i + j], color="green", label="Projection")
-            plotter_2d.plot_points(x_list_[n_col * i + j], color="red", label="Reprojection")
-
-    plotter_2d.show()
-    plotter_2d.close()
+    show_2d_projection_data(x_list, reproj_x_list, n_col=6)
 
     print("Bundle Adjustment")
     bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
@@ -89,40 +74,21 @@ def main():
     data = bundle_adjuster.get_log()
 
     # バンドル調整後のシーンデータの表示
-    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
-    plotter_3d.set_lim()
-    plotter_3d.plot_points(X_)
-    for i, (R, t) in enumerate(zip(R_, t_), start=1):
-        plotter_3d.plot_basis(R, t, label=f"Camera{i}")
-    plotter_3d.show()
-    plotter_3d.close()
+    show_3d_scene_data(X_, R_, t_)
 
     cameras_ = []
     for R_pred, t_pred, K_pred in zip(R_, t_, K_):
         cameras_.append(Camera(R_pred, t_pred, K_pred))
 
-    x_list_ = []
+    reproj_x_list = []
     for camera in cameras_:
         x = camera.project_points(X_, method="perspective")
-        x_list_.append(x)
+        reproj_x_list.append(x)
 
-    n_col = 6
-    n_row = (n_images - 1) // n_col + 1
-    plotter_2d = TwoDimensionalMatrixPlotter(n_row, n_col, (20, 6))
-    for i in range(n_row):
-        range_width = range(n_images % n_col) if i == n_images // n_col else range(n_col)
-        for j in range_width:
-            # camera(i * j)で射影した2次元データ点のプロット
-            plotter_2d.select(n_col * i + j)
-            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", (-0.5, 0.5), (-0.5, 0.5))
-
-            plotter_2d.plot_points(x_list[n_col * i + j], color="green", label="Projection")
-            plotter_2d.plot_points(x_list_[n_col * i + j], color="red", label="Reprojection")
-
-    plotter_2d.show()
-    plotter_2d.close()
+    show_2d_projection_data(x_list, reproj_x_list, n_col=6)
 
     animate(data)
+
 
 if __name__ == "__main__":
     main()

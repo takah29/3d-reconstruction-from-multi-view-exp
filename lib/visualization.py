@@ -92,6 +92,40 @@ class TwoDimensionalMatrixPlotter:
         plt.close()
 
 
+def show_3d_scene_data(X, R, t):
+    """データ点とカメラの姿勢を3Dプロットして表示する"""
+    plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
+    plotter_3d.set_lim()
+    plotter_3d.plot_points(X)
+    for i, (R_, t_) in enumerate(zip(R, t), start=1):
+        plotter_3d.plot_basis(R_, t_, label=f"Camera{i}")
+    plotter_3d.show()
+    plotter_3d.close()
+
+
+def show_2d_projection_data(x_list, reproj_x_list=None, n_col=6):
+    """投影点と再投影点をプロットして表示する"""
+    n_images = len(x_list)
+    n_row = (n_images - 1) // n_col + 1
+    plotter_2d = TwoDimensionalMatrixPlotter(n_row, n_col, (20, 6))
+    for i in range(n_row):
+        range_width = range(n_images % n_col) if i == n_images // n_col else range(n_col)
+        for j in range_width:
+            # camera(i * j)で射影した2次元データ点のプロット
+            plotter_2d.select(n_col * i + j)
+            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", (-0.5, 0.5), (-0.5, 0.5))
+
+            plotter_2d.plot_points(x_list[n_col * i + j], color="green", label="Projection")
+
+            if reproj_x_list is not None:
+                plotter_2d.plot_points(
+                    reproj_x_list[n_col * i + j], color="red", label="Reprojection"
+                )
+
+    plotter_2d.show()
+    plotter_2d.close()
+
+
 def animate(data):
     """基底と点群をアニメーションでプロットする
 
