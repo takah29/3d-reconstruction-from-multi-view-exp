@@ -215,19 +215,11 @@ class BundleAdjuster:
         dqdX.shape = (n_points, n_images, 3)
         drdX.shape = (n_points, n_images, 3)
         """
-        dpdX = []
-        dqdX = []
-        drdX = []
-        for _ in range(self._n_points):
-            # P.shape = (n_images, 3, 4)
-            dpdX.append(P[:, 0, :3])
-            dqdX.append(P[:, 1, :3])
-            drdX.append(P[:, 2, :3])
 
         # (n_points, n_images, 3)
-        dpdX = np.stack(dpdX)
-        dqdX = np.stack(dqdX)
-        drdX = np.stack(drdX)
+        dpdX = np.tile(P[:, 0, :3], (self._n_points, 1, 1))
+        dqdX = np.tile(P[:, 1, :3], (self._n_points, 1, 1))
+        drdX = np.tile(P[:, 2, :3], (self._n_points, 1, 1))
 
         return dpdX, dqdX, drdX
 
@@ -274,20 +266,16 @@ class BundleAdjuster:
         dqdt.shape = (n_points, n_images, 3)
         drdt.shape = (n_points, n_images, 3)
         """
-            dpdt.append(
-                -(self._f[:, np.newaxis] * self._R[:, :, 0] + self._u[:, :1] * self._R[:, :, 2])
-            )
-            dqdt.append(
-                -(self._f[:, np.newaxis] * self._R[:, :, 1] + self._u[:, -1:] * self._R[:, :, 2])
-            )
 
-            # () * (n_images, 3) -> (n_images, 3)
-            drdt.append(-self._f0 * self._R[:, :, 2])
-
-        # (n_points, n_images, 3)
-        dpdt = np.stack(dpdt)
-        dqdt = np.stack(dqdt)
-        drdt = np.stack(drdt)
+        dpdt = np.tile(
+            -(self._f[:, np.newaxis] * self._R[:, :, 0] + self._u[:, :1] * self._R[:, :, 2]),
+            (self._n_points, 1, 1),
+        )
+        dqdt = np.tile(
+            -(self._f[:, np.newaxis] * self._R[:, :, 1] + self._u[:, -1:] * self._R[:, :, 2]),
+            (self._n_points, 1, 1),
+        )
+        drdt = np.tile(-self._f0 * self._R[:, :, 2], (self._n_points, 1, 1))
 
         return dpdt, dqdt, drdt
 
