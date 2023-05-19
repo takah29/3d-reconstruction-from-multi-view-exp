@@ -5,11 +5,20 @@ from .perspective_camera_calibration import (
 from .utils import get_rotation_matrix
 
 import numpy as np
+import numpy.typing as npt
 from scipy.linalg import block_diag
 
 
 class BundleAdjuster:
-    def __init__(self, x_list, init_X, init_K, init_R, init_t, f0=1.0):
+    def __init__(
+        self,
+        x_list: list[npt.NDArray],
+        init_X: npt.NDArray,
+        init_K: npt.NDArray,
+        init_R: npt.NDArray,
+        init_t: npt.NDArray,
+        f0=1.0,
+    ):
         # (n_points, n_images, 2)
         self._x = np.stack(x_list, axis=1)
 
@@ -29,14 +38,17 @@ class BundleAdjuster:
 
         # カメラパラメータはR1=I, t1=0, t2_2=1を仮定しているので、該当の未知数を削除するためのインデックスを用意する
         # カメラパラメータ: (f1, u01, v01, t1_1, t1_2, t1_3, omega1_1, omega1_2, omega1_3, f2, u02, ...)
-        self._excluded_ind = np.array([3, 4, 5, 6, 7, 8, 13])
+        self._remove_ind = np.array([3, 4, 5, 6, 7, 8, 13])
 
         # 削除したカメラパラメータの要素を挿入するためのインデックス
         self._insert_ind = np.array([3, 3, 3, 3, 3, 3, 7])
 
-        self._log = []
+        # 最適化時にイテレーションごとの3次元点とカメラパラメータのログを保存する変数
+        self._log: list[dict[str, npt.NDArray]] = []
 
-    def optimize(self, delta_tol, scale_factor=10.0, is_debug=False):
+    def optimize(
+        self, delta_tol: float, scale_factor: float = 10.0, is_debug: bool = False
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
         """再投影誤差を最小化するX, K, R, tを求める"""
         K = self._get_K(self._f, self._u)
         P, p, q, r = self._calc_pqr(self._X, K, self._R, self._t)
@@ -69,9 +81,9 @@ class BundleAdjuster:
             while True:
                 # 2階微分行列matE, matGの対角成分を1+c倍する
                 matEc = matE.copy()
-                matGc = matG.copy()
                 tmp_ind = np.arange(3)
                 matEc[:, tmp_ind, tmp_ind] *= 1 + c
+                matGc = matG.copy()
                 tmp_ind = np.arange(9 * self._n_images - 7)
                 matGc[tmp_ind, tmp_ind] *= 1 + c
 
@@ -88,8 +100,9 @@ class BundleAdjuster:
                 # (n_points, 3, 1)
                 delta_X_E = d_P.reshape(self._n_points, 3)[..., np.newaxis]
 
-                # (n_points, 9 * n_images - 7, 3) @ (n_points, 3, 1) -> (n_points, 9 * n_images - 7, 1)
-                # -> (n_points, 9 * n_images - 7) -> (9 * n_images - 7, )
+                # (n_points, 9 * n_images - 7, 3) @ (n_points, 3, 1)
+                # -> (n_points, 9 * n_images - 7, 1)　-> (n_points, 9 * n_images - 7)
+                # -> (9 * n_images - 7, )
                 b = (FtEinv @ delta_X_E).squeeze().sum(axis=0) - d_F
 
                 # (9 * n_images - 7, )
@@ -102,7 +115,7 @@ class BundleAdjuster:
                 delta_X = -(matEinv @ (matF @ delta_xi_F[:, np.newaxis] + delta_X_E)).squeeze()
 
                 # パラメータの更新
-                tmp_X = self._update_X(delta_X)
+                tmp_X = self._update_3d_points(delta_X)
                 tmp_f, tmp_u, tmp_t, tmp_R = self._update_camera_params(delta_xi_F)
 
                 # 更新したパラメータで再投影誤差を計算する
@@ -142,13 +155,16 @@ class BundleAdjuster:
 
         return X_, self._get_K(self._f, self._u), R_, t_
 
-    def get_log(self):
+    def get_log(self) -> list[dict[str, npt.NDArray]]:
+        """イテレーションごとに記録した3次元点とカメラパラメータを取得する"""
         return self._log
 
-    def _update_X(self, delta_X):
+    def _update_3d_points(self, delta_X: npt.NDArray) -> npt.NDArray:
         return self._X + delta_X
 
-    def _update_camera_params(self, delta_xi_F):
+    def _update_camera_params(
+        self, delta_xi_F: npt.NDArray
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
         # (9 * n_images, )
         delta_xi_F = np.insert(delta_xi_F, self._insert_ind, np.zeros(self._insert_ind.shape))
 
@@ -166,7 +182,7 @@ class BundleAdjuster:
 
         return self._f + delta_f, self._u + delta_u, self._t + delta_t, delta_R @ self._R
 
-    def _get_K(self, f, u):
+    def _get_K(self, f: npt.NDArray, u: npt.NDArray) -> npt.NDArray:
         K = np.zeros((self._n_images, 3, 3))
         K[:, (0, 1), (0, 1)] = f[:, np.newaxis]
         K[:, :2, 2] = u
@@ -174,7 +190,9 @@ class BundleAdjuster:
 
         return K
 
-    def _calc_pqr(self, X, K, R, t):
+    def _calc_pqr(
+        self, X: npt.NDArray, K: npt.NDArray, R: npt.NDArray, t: npt.NDArray
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
         # (n_points, 4)
         X_ext = np.hstack((X, np.ones((self._n_points, 1))))
 
@@ -189,7 +207,7 @@ class BundleAdjuster:
 
         return P, p, q, r
 
-    def _calc_X_diff_pqr(self, P):
+    def _calc_X_diff_pqr(self, P: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         """p, q, rの3次元位置Xに関する微分を求める
 
         dpdX.shape = (n_points, n_images, 3)
@@ -212,7 +230,9 @@ class BundleAdjuster:
 
         return dpdX, dqdX, drdX
 
-    def _calc_f_diff_pqr(self, p, q, r):
+    def _calc_f_diff_pqr(
+        self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         """p, q, r焦点距離fに関する微分を求める"""
         # ((n_points, n_images) - (1, n_images) / () * (n_points, n_images)) / (1, n_images)
         # -> (n_points, n_images)
@@ -222,7 +242,7 @@ class BundleAdjuster:
 
         return dpdf, dqdf, drdf
 
-    def _calc_u_diff_pqr(self, r):
+    def _calc_u_diff_pqr(self, r: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         """p, q, rの光軸点uに関する微分を求める"""
         tmp = r / self._f0
         zero_array = np.zeros(tmp.shape)
@@ -234,7 +254,7 @@ class BundleAdjuster:
 
         return dpdu, dqdu, drdu
 
-    def _calc_t_diff_pqr(self):
+    def _calc_t_diff_pqr(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         """p, q, rの並進tに関する微分を求める"""
         dpdt = []
         dqdt = []
@@ -258,7 +278,9 @@ class BundleAdjuster:
 
         return dpdt, dqdt, drdt
 
-    def _calc_R_diff_pqr(self, dpdt, dqdt, drdt):
+    def _calc_R_diff_pqr(
+        self, dpdt: npt.NDArray, dqdt: npt.NDArray, drdt: npt.NDArray
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         """p, q, rの回転Rに関する微分を求める"""
         # (n_points, 1, 3) - (1, n_images, 3) -> (n_points, n_images, 3)
         X_minus_t = self._X[:, np.newaxis] - self._t[np.newaxis]
@@ -270,7 +292,9 @@ class BundleAdjuster:
 
         return dp_domega, dq_domega, dr_domega
 
-    def _calc_camera_params_diff_pqr(self, p, q, r):
+    def _calc_camera_params_diff_pqr(
+        self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         """p, q, rのカメラパラメータf,u,v,t,Rに関する微分を取得する"""
         # (n_points, n_images)
         dpdf, dqdf, drdf = self._calc_f_diff_pqr(p, q, r)
@@ -291,7 +315,15 @@ class BundleAdjuster:
 
         return dp_dparams, dq_dparams, dr_dparams
 
-    def _calc_d_P(self, p, q, r, dpdX, dqdX, drdX):
+    def _calc_d_P(
+        self,
+        p: npt.NDArray,
+        q: npt.NDArray,
+        r: npt.NDArray,
+        dpdX: npt.NDArray,
+        dqdX: npt.NDArray,
+        drdX: npt.NDArray,
+    ) -> npt.NDArray:
         """誤差関数Eの3次元位置Xに関する微分d_Pを求める"""
         # (n_points, n_images) / (n_points, n_images) - (n_points, n_images) / ()
         # -> (n_points, n_images)
@@ -320,7 +352,15 @@ class BundleAdjuster:
 
         return d_P
 
-    def _calc_d_F(self, p, q, r, dp_dparams, dq_dparams, dr_dparams):
+    def _calc_d_F(
+        self,
+        p: npt.NDArray,
+        q: npt.NDArray,
+        r: npt.NDArray,
+        dp_dparams: npt.NDArray,
+        dq_dparams: npt.NDArray,
+        dr_dparams: npt.NDArray,
+    ) -> npt.NDArray:
         """誤差関数Eのカメラパラメータに関する微分d_Fを求める"""
         # (n_points, n_images) / (n_points, n_images) - (n_points, n_images) / ()
         # -> (n_points, n_images)
@@ -348,14 +388,22 @@ class BundleAdjuster:
         d_F = 2 * (d / r[..., np.newaxis] ** 2).sum(axis=0).ravel()
 
         included_ind = np.ones(d_F.shape, dtype=np.bool_)
-        included_ind[self._excluded_ind] = False
+        included_ind[self._remove_ind] = False
 
         # (9 * n_images - 7, )
         d_F = d_F[included_ind]
 
         return d_F
 
-    def _calc_matE(self, p, q, r, dpdX, dqdX, drdX):
+    def _calc_matE(
+        self,
+        p: npt.NDArray,
+        q: npt.NDArray,
+        r: npt.NDArray,
+        dpdX: npt.NDArray,
+        dqdX: npt.NDArray,
+        drdX: npt.NDArray,
+    ) -> npt.NDArray:
         """誤差関数Eの3次元位置Xに関する2回微分matEを求める"""
         # (n_points, n_images, 1) * (n_points, n_images, 3)
         # - (n_points, n_images, 1) * (n_points, n_images, 3)
@@ -381,7 +429,18 @@ class BundleAdjuster:
 
         return matE
 
-    def _calc_matF(self, p, q, r, dpdX, dqdX, drdX, dp_dparams, dq_dparams, dr_dparams):
+    def _calc_matF(
+        self,
+        p: npt.NDArray,
+        q: npt.NDArray,
+        r: npt.NDArray,
+        dpdX: npt.NDArray,
+        dqdX: npt.NDArray,
+        drdX: npt.NDArray,
+        dp_dparams: npt.NDArray,
+        dq_dparams: npt.NDArray,
+        dr_dparams: npt.NDArray,
+    ) -> npt.NDArray:
         """誤差関数Eの3次元位置Xとカメラパラメータに関する2回微分matFを求める"""
         # (n_points, n_images, 1) * (n_points, n_images, 3)
         # - (n_points, n_images, 1) * (n_points, n_images, 3)
@@ -418,14 +477,22 @@ class BundleAdjuster:
         matF = matF.transpose(0, 2, 1, 3).reshape(self._n_points, 3, -1)
 
         included_ind = np.ones(matF.shape[2], dtype=np.bool_)
-        included_ind[self._excluded_ind] = False
+        included_ind[self._remove_ind] = False
 
         # (n_points, 3, 9 * n_images - 7)
         matF = matF[:, :, included_ind]
 
         return matF
 
-    def _calc_matG(self, p, q, r, dp_dparams, dq_dparams, dr_dparams):
+    def _calc_matG(
+        self,
+        p: npt.NDArray,
+        q: npt.NDArray,
+        r: npt.NDArray,
+        dp_dparams: npt.NDArray,
+        dq_dparams: npt.NDArray,
+        dr_dparams: npt.NDArray,
+    ) -> npt.NDArray:
         """誤差関数Eのカメラパラメータに関する2回微分matGを求める"""
         # (n_points, n_images, 1) * (n_points, n_images, 9)
         # - (n_points, n_images, 1) * (n_points, n_images, 9)
@@ -453,14 +520,14 @@ class BundleAdjuster:
         matG = block_diag(*matG)
 
         included_ind = np.ones(matG.shape[0], dtype=np.bool_)
-        included_ind[self._excluded_ind] = False
+        included_ind[self._remove_ind] = False
 
         # (9 * n_images - 7, 9 * n_images - 7)
         matG = matG[included_ind][:, included_ind]
 
         return matG
 
-    def _calc_reprojection_error(self, p, q, r):
+    def _calc_reprojection_error(self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray) -> float:
         """再投影誤差Eを求める"""
         # (n_images, n_points)
         x1 = self._x[:, :, 0]
