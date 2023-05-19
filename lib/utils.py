@@ -29,15 +29,15 @@ def get_rotation_matrix(omega: NDArray) -> NDArray:
     return R
 
 
-def sample_normal_dist(scale: float, n: int):
+def sample_normal_dist(scale: float, n: int) -> NDArray:
     return np.random.normal(0, scale, (n, 3))
 
 
-def add_noise(X, scale: float) -> NDArray:
+def add_noise(X: NDArray, scale: float) -> NDArray:
     return X + np.random.normal(0, scale, X.shape)
 
 
-def sample_hemisphere_points(num, r):
+def sample_hemisphere_points(num: int, r: float) -> NDArray:
     points = []
     for _ in range(num):
         theta = np.random.uniform(0, np.pi / 2)
@@ -49,7 +49,7 @@ def sample_hemisphere_points(num, r):
 
         points.append((x, y, z))
 
-    return points
+    return np.array(points)
 
 
 def set_points1():
@@ -60,4 +60,4 @@ def set_points1():
             y, z = r * np.cos(theta), r * np.sin(theta)
             points.append((x, y, z))
 
-    return np.vstack(points)
+    return np.array(points)
