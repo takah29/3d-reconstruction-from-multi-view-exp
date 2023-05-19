@@ -13,8 +13,9 @@ def _get_observation_matrix(*data_list: tuple[npt.NDArray, ...]) -> tuple[npt.ND
     W.shape: (2 * image_num, n_feature_points)
     t.shape: (image_num, 2)
     """
-    length_list = [len(x) for x in data_list]
-    if length_list.count(length_list[0]) != len(length_list):
+
+    length_arr = np.array([len(x) for x in data_list])
+    if (length_arr[0] != length_arr).any():
         raise ValueError()
 
     W = np.hstack(data_list).T
