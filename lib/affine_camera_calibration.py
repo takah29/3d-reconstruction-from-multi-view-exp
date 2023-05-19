@@ -1,20 +1,19 @@
 from itertools import product
-from typing import List, Tuple
 
 import numpy as np
 import numpy.typing as npt
 
 
 def orthographic_self_calibration(
-    data_list: List[npt.NDArray[np.floating]],
-) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    data_list: list[npt.NDArray[np.floating]],
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """平行投影カメラモデルによる自己校正を行う
 
     S.shape: (3, n_feature_points)
     R.shape: (image_num, 3, 3)
     """
     # 観測行列Wと画像中心tの取得
-    W, t = _get_observation_matrix(*data_list)
+    W, t = _get_observation_matrix(data_list)
 
     # 因子分解
     U, Sigma, Vt = np.linalg.svd(W)
@@ -27,7 +26,7 @@ def orthographic_self_calibration(
         n_images = W.shape[0] // 2
         B_cal = np.zeros((3, 3, 3, 3))
         for n in range(n_images):
-            for (i, j, k, l) in product(range(3), repeat=4):
+            for i, j, k, l in product(range(3), repeat=4):
                 B_cal[i, j, k, l] += (
                     u_[n][0, i] * u_[n][0, j] * u_[n][0, k] * u_[n][0, l]
                     + u_[n][1, i] * u_[n][1, j] * u_[n][1, k] * u_[n][1, l]
@@ -58,15 +57,15 @@ def orthographic_self_calibration(
 
 
 def symmetric_affine_self_calibration(
-    data_list: List[npt.NDArray[np.floating]],
-) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    data_list: list[npt.NDArray[np.floating]],
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """対象アフィンカメラモデルによる自己校正を行う
 
     S.shape: (3, n_feature_points)
     R.shape: (image_num, 3, 3)
     """
     # 観測行列Wと画像中心tの取得
-    W, t = _get_observation_matrix(*data_list)
+    W, t = _get_observation_matrix(data_list)
 
     # 因子分解
     U, Sigma, Vt = np.linalg.svd(W)
@@ -81,7 +80,7 @@ def symmetric_affine_self_calibration(
         n_images = W.shape[0] // 2
         B_cal = np.zeros((3, 3, 3, 3))
         for n in range(n_images):
-            for (i, j, k, l) in product(range(3), repeat=4):
+            for i, j, k, l in product(range(3), repeat=4):
                 B_cal[i, j, k, l] += (
                     a[n] ** 2
                     * (
@@ -136,8 +135,8 @@ def symmetric_affine_self_calibration(
 
 
 def paraperspective_self_calibration(
-    data_list: List[npt.NDArray[np.floating]], f: npt.NDArray[np.floating]
-) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    data_list: list[npt.NDArray[np.floating]], f: npt.NDArray[np.floating]
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """疑似平行投影カメラモデルによる自己校正を行う
 
     S.shape: (3, n_feature_points)
@@ -147,7 +146,7 @@ def paraperspective_self_calibration(
         raise ValueError()
 
     # 観測行列Wと画像中心tの取得
-    W, t = _get_observation_matrix(*data_list)
+    W, t = _get_observation_matrix(data_list)
 
     # 因子分解
     U, Sigma, Vt = np.linalg.svd(W)
@@ -163,7 +162,7 @@ def paraperspective_self_calibration(
         n_images = W.shape[0] // 2
         B_cal = np.zeros((3, 3, 3, 3))
         for n in range(n_images):
-            for (i, j, k, l) in product(range(3), repeat=4):
+            for i, j, k, l in product(range(3), repeat=4):
                 B_cal[i, j, k, l] += (
                     (gamma[n] ** 2 + 1)
                     * alpha[n] ** 2
@@ -222,7 +221,9 @@ def paraperspective_self_calibration(
     return S.T, R
 
 
-def _get_observation_matrix(*data_list):
+def _get_observation_matrix(
+    data_list: list[npt.NDArray[np.floating]],
+) -> tuple[npt.NDArray, npt.NDArray]:
     """観測行列と各画像の重心ベクトルを計算する
 
     W.shape: (2 * image_num, n_feature_points)
@@ -239,13 +240,13 @@ def _get_observation_matrix(*data_list):
     return W, t.reshape(-1, 2)
 
 
-def _get_B(B_cal):
+def _get_B(B_cal: npt.NDArray) -> npt.NDArray:
     """行列Bを取得する"""
     B1 = np.zeros((3, 3))
     B2 = np.zeros((3, 3))
     B3 = np.zeros((3, 3))
     B4 = np.zeros((3, 3))
-    for (i, j) in product(range(3), repeat=2):
+    for i, j in product(range(3), repeat=2):
         B1[i, j] = B_cal[i, i, j, j]
         B2[i, j] = np.sqrt(2) * B_cal[i, i, (j + 1) % 3, (j + 2) % 3]
         B3[i, j] = np.sqrt(2) * B_cal[(i + 1) % 3, (i + 2) % 3, j, j]
@@ -255,7 +256,7 @@ def _get_B(B_cal):
     return B
 
 
-def _get_T(tau):
+def _get_T(tau: npt.NDArray) -> npt.NDArray:
     """計量行列Tを取得する"""
     T = np.array(
         [
@@ -268,7 +269,9 @@ def _get_T(tau):
     return T
 
 
-def _get_zeta_beta_g(U_, T, t):
+def _get_zeta_beta_g(
+    U_: npt.NDArray, T: npt.NDArray, t: npt.NDArray
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     image_num = t.shape[0]
 
     P = np.ones((image_num, 3, 2))
@@ -306,7 +309,9 @@ def _get_zeta_beta_g(U_, T, t):
     return zeta, beta, g
 
 
-def _compute_rotation_mat(M, U_, T, t):
+def _compute_rotation_mat(
+    M: npt.NDArray, U_: npt.NDArray, T: npt.NDArray, t: npt.NDArray
+) -> npt.NDArray:
     """カメラの回転行列を計算する"""
 
     zeta, beta, g = _get_zeta_beta_g(U_, T, t)

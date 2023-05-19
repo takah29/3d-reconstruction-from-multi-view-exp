@@ -3,7 +3,7 @@ from numpy.typing import NDArray
 
 
 class ThreeDimensionalPlotter:
-    def __init__(self, figsize=None, title=None):
+    def __init__(self, figsize: tuple[int, int] | None = None, title: str | None = None):
         """Xを上、Zを奥行きとした右手系座標を設定する"""
         self.fig = plt.figure(figsize=figsize)
 
@@ -14,7 +14,12 @@ class ThreeDimensionalPlotter:
         self.ax.set_zlabel("X")
         self.ax.set_box_aspect((1, 1, 1))
 
-    def set_lim(self, xlim=[-5.0, 5.0], ylim=[-5.0, 5.0], zlim=[-5.0, 5.0]):
+    def set_lim(
+        self,
+        xlim: list[float] = [-5.0, 5.0],
+        ylim: list[float] = [-5.0, 5.0],
+        zlim: list[float] = [-5.0, 5.0],
+    ) -> None:
         self.ax.set_xlim3d(ylim)
         self.ax.set_ylim3d(zlim)
         self.ax.set_zlim3d(xlim)
@@ -46,30 +51,32 @@ class ThreeDimensionalPlotter:
         """3次元点群をプロットする、colorはリストで与えても良い"""
         self.ax.scatter(X[:, 1], X[:, 2], X[:, 0], c=color, marker="o")
 
-    def show(self):
+    def show(self) -> None:
         """3次元グラフを表示する"""
         plt.show()
 
-    def close(self):
+    def close(self) -> None:
         plt.clf()
         plt.close()
 
-    def pause(self, s=0.1):
+    def pause(self, s=0.1) -> None:
         plt.pause(s)
 
 
 class TwoDimensionalMatrixPlotter:
-    def __init__(self, n_row, n_col, figsize=None, is_grid=True):
+    def __init__(
+        self, n_row: int, n_col: int, figsize: tuple[int, int] | None = None, is_grid: bool = True
+    ) -> None:
         plt.figure(figsize=figsize)
 
         self.n_row = n_row
         self.n_col = n_col
         self.is_grid = is_grid
 
-    def select(self, plot_id: int):
+    def select(self, plot_id: int) -> None:
         self.current_ax = plt.subplot(self.n_row, self.n_col, plot_id + 1)
 
-    def set_property(self, title, xlim=[-1.0, 1.0], ylim=[-1.0, 1.0]):
+    def set_property(self, title: str, xlim=[-1.0, 1.0], ylim=[-1.0, 1.0]) -> None:
         self.current_ax.set_title(title)
         self.current_ax.set_aspect("equal")
         self.current_ax.set_xlim(ylim)
@@ -83,16 +90,16 @@ class TwoDimensionalMatrixPlotter:
         if label is not None:
             self.current_ax.legend()
 
-    def show(self):
+    def show(self) -> None:
         """2次元グラフを表示する"""
         plt.show()
 
-    def close(self):
+    def close(self) -> None:
         plt.clf()
         plt.close()
 
 
-def show_3d_scene_data(X, R, t):
+def show_3d_scene_data(X: NDArray, R: NDArray, t: NDArray) -> None:
     """データ点とカメラの姿勢を3Dプロットして表示する"""
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
     plotter_3d.set_lim()
@@ -103,7 +110,9 @@ def show_3d_scene_data(X, R, t):
     plotter_3d.close()
 
 
-def show_2d_projection_data(x_list, reproj_x_list=None, n_col=6):
+def show_2d_projection_data(
+    x_list: list[NDArray], reproj_x_list: list[NDArray] | None = None, n_col: int = 6
+) -> None:
     """投影点と再投影点をプロットして表示する"""
     n_images = len(x_list)
     n_row = (n_images - 1) // n_col + 1
@@ -126,7 +135,7 @@ def show_2d_projection_data(x_list, reproj_x_list=None, n_col=6):
     plotter_2d.close()
 
 
-def animate(data):
+def animate(data: list[dict[str, NDArray]]):
     """基底と点群をアニメーションでプロットする
 
     dataは以下のデータ構造を仮定する
