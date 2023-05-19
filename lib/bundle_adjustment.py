@@ -193,6 +193,7 @@ class BundleAdjuster:
     def _calc_pqr(
         self, X: npt.NDArray, K: npt.NDArray, R: npt.NDArray, t: npt.NDArray
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
+        """カメラ行列Pとp, q, rの3次元位置Xに関する微分を求める"""
         # (n_points, 4)
         X_ext = np.hstack((X, np.ones((self._n_points, 1))))
 
@@ -233,7 +234,13 @@ class BundleAdjuster:
     def _calc_f_diff_pqr(
         self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        """p, q, r焦点距離fに関する微分を求める"""
+        """p, q, r焦点距離fに関する微分を求める
+
+        dpdf.shape = (n_points, n_images)
+        dqdf.shape = (n_points, n_images)
+        drdf.shape = (n_points, n_images)
+        """
+
         # ((n_points, n_images) - (1, n_images) / () * (n_points, n_images)) / (1, n_images)
         # -> (n_points, n_images)
         dpdf = (p - self._u[:, 0][np.newaxis] / self._f0 * r) / self._f[np.newaxis]
@@ -243,7 +250,13 @@ class BundleAdjuster:
         return dpdf, dqdf, drdf
 
     def _calc_u_diff_pqr(self, r: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        """p, q, rの光軸点uに関する微分を求める"""
+        """p, q, rの光軸点uに関する微分を求める
+
+        dpdu.shape = (n_points, n_images, 2)
+        dqdu.shape = (n_points, n_images, 2)
+        drdu.shape = (n_points, n_images, 2)
+        """
+
         tmp = r / self._f0
         zero_array = np.zeros(tmp.shape)
 
@@ -255,12 +268,12 @@ class BundleAdjuster:
         return dpdu, dqdu, drdu
 
     def _calc_t_diff_pqr(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        """p, q, rの並進tに関する微分を求める"""
-        dpdt = []
-        dqdt = []
-        drdt = []
-        for _ in range(self._n_points):
-            # (n_images, 1) * (n_images, 3) + (n_images, 1) * (n_images, 3) -> (n_images, 3)
+        """p, q, rの並進tに関する微分を求める
+
+        dpdt.shape = (n_points, n_images, 3)
+        dqdt.shape = (n_points, n_images, 3)
+        drdt.shape = (n_points, n_images, 3)
+        """
             dpdt.append(
                 -(self._f[:, np.newaxis] * self._R[:, :, 0] + self._u[:, :1] * self._R[:, :, 2])
             )
@@ -281,7 +294,13 @@ class BundleAdjuster:
     def _calc_R_diff_pqr(
         self, dpdt: npt.NDArray, dqdt: npt.NDArray, drdt: npt.NDArray
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        """p, q, rの回転Rに関する微分を求める"""
+        """p, q, rの回転Rに関する微分を求める
+
+        dp_domega.shape = (n_points, n_images, 3)
+        dq_domega.shape = (n_points, n_images, 3)
+        dr_domega.shape = (n_points, n_images, 3)
+        """
+
         # (n_points, 1, 3) - (1, n_images, 3) -> (n_points, n_images, 3)
         X_minus_t = self._X[:, np.newaxis] - self._t[np.newaxis]
 
@@ -295,7 +314,13 @@ class BundleAdjuster:
     def _calc_camera_params_diff_pqr(
         self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        """p, q, rのカメラパラメータf,u,v,t,Rに関する微分を取得する"""
+        """p, q, rのカメラパラメータf,u,v,t,Rに関する微分を取得する
+
+        dp_dparams.shape = (n_points, n_images, 9)
+        dq_dparams.shape = (n_points, n_images, 9)
+        dr_dparams.shape = (n_points, n_images, 9)
+        """
+
         # (n_points, n_images)
         dpdf, dqdf, drdf = self._calc_f_diff_pqr(p, q, r)
 
@@ -324,7 +349,11 @@ class BundleAdjuster:
         dqdX: npt.NDArray,
         drdX: npt.NDArray,
     ) -> npt.NDArray:
-        """誤差関数Eの3次元位置Xに関する微分d_Pを求める"""
+        """誤差関数Eの3次元位置Xに関する微分d_Pを求める
+
+        d_P.shape = (3 * n_points, )
+        """
+
         # (n_points, n_images) / (n_points, n_images) - (n_points, n_images) / ()
         # -> (n_points, n_images)
         d1 = p / r - self._x[..., 0] / self._f0
@@ -361,7 +390,11 @@ class BundleAdjuster:
         dq_dparams: npt.NDArray,
         dr_dparams: npt.NDArray,
     ) -> npt.NDArray:
-        """誤差関数Eのカメラパラメータに関する微分d_Fを求める"""
+        """誤差関数Eのカメラパラメータに関する微分d_Fを求める
+
+        d_F.shape = (9 * n_images - 7, )
+        """
+
         # (n_points, n_images) / (n_points, n_images) - (n_points, n_images) / ()
         # -> (n_points, n_images)
         d1 = p / r - self._x[..., 0] / self._f0
@@ -404,7 +437,11 @@ class BundleAdjuster:
         dqdX: npt.NDArray,
         drdX: npt.NDArray,
     ) -> npt.NDArray:
-        """誤差関数Eの3次元位置Xに関する2回微分matEを求める"""
+        """誤差関数Eの3次元位置Xに関する2回微分matEを求める
+
+        matE.shape = (n_points, 3, 3)
+        """
+
         # (n_points, n_images, 1) * (n_points, n_images, 3)
         # - (n_points, n_images, 1) * (n_points, n_images, 3)
         # -> (n_points, n_images, 3)
@@ -441,7 +478,11 @@ class BundleAdjuster:
         dq_dparams: npt.NDArray,
         dr_dparams: npt.NDArray,
     ) -> npt.NDArray:
-        """誤差関数Eの3次元位置Xとカメラパラメータに関する2回微分matFを求める"""
+        """誤差関数Eの3次元位置Xとカメラパラメータに関する2回微分matFを求める
+
+        matF.shape = (n_points, 3, 9 * n_images - 7)
+        """
+
         # (n_points, n_images, 1) * (n_points, n_images, 3)
         # - (n_points, n_images, 1) * (n_points, n_images, 3)
         # -> (n_points, n_images, 3)
@@ -493,7 +534,11 @@ class BundleAdjuster:
         dq_dparams: npt.NDArray,
         dr_dparams: npt.NDArray,
     ) -> npt.NDArray:
-        """誤差関数Eのカメラパラメータに関する2回微分matGを求める"""
+        """誤差関数Eのカメラパラメータに関する2回微分matGを求める
+
+        matG.shape = (9 * n_images - 7, 9 * n_images - 7)
+        """
+
         # (n_points, n_images, 1) * (n_points, n_images, 9)
         # - (n_points, n_images, 1) * (n_points, n_images, 9)
         # -> (n_points, n_images, 9)
@@ -529,6 +574,7 @@ class BundleAdjuster:
 
     def _calc_reprojection_error(self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray) -> float:
         """再投影誤差Eを求める"""
+
         # (n_images, n_points)
         x1 = self._x[:, :, 0]
         x2 = self._x[:, :, 1]
