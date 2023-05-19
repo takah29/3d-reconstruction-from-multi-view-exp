@@ -33,7 +33,7 @@ class Camera:
 
     def _orthographic_projection(self, X):
         X_ext = np.hstack((X, np.ones((X.shape[0], 1))))
-        R, t = self.get_pose()
+        _, R, t = self.get_parameters()
         X_ext_ = X_ext @ np.hstack([R.T, -R.T @ t[:, np.newaxis]]).T
         return X_ext_[:, :2]
 
