@@ -7,7 +7,7 @@ import numpy.typing as npt
 from .utils import unit_vec
 
 
-def _get_observation_matrix(*data_list):
+def _get_observation_matrix(*data_list: tuple[npt.NDArray, ...]) -> tuple[npt.NDArray, npt.NDArray]:
     """観測行列と各画像の重心ベクトルを計算する
 
     W.shape: (2 * image_num, n_feature_points)
@@ -25,9 +25,10 @@ def _get_observation_matrix(*data_list):
 
 
 def factorization_method(
-    W: npt.NDArray[np.floating], n_rank=4
+    W: npt.NDArray[np.floating], n_rank: int = 4
 ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """観測行列Wから因子分解法によって、運動行列Mと形状行列Sを求める"""
+
     U, Sigma, Vt = np.linalg.svd(W)
 
     M = U[:, :n_rank]
@@ -36,12 +37,13 @@ def factorization_method(
     return M, S
 
 
-def _get_initial_intrinsic_params(n_images, f0):
+def _get_initial_intrinsic_params(n_images: int, f0: float) -> npt.NDArray:
     """初期内部パラメータ行列Kを作成する"""
+
     return np.tile(np.eye(3) * f0, (n_images, 1, 1))
 
 
-def _create_data_matrix(x_list, f0):
+def _create_data_matrix(x_list: list[npt.NDArray], f0: float) -> npt.NDArray:
     # (n_images, n_points, 3)
     x = np.asarray([np.hstack((x / f0, np.ones((x.shape[0], 1)))) for x in x_list])
     # (n_points, n_images, 3)
@@ -50,7 +52,7 @@ def _create_data_matrix(x_list, f0):
     return x
 
 
-def _compute_reprojection_error(x, M, S, f0):
+def _compute_reprojection_error(x: npt.NDArray, M: npt.NDArray, S: npt.NDArray, f0: float) -> float:
     """再投影誤差を計算する"""
     # (3 * n_images, 4) @ (4, n_points) -> (3 * n_images, n_points) -> (n_images, 3, n_points)
     # -> (n_points, n_images, 3)
@@ -69,7 +71,7 @@ def _compute_reprojection_error(x, M, S, f0):
 
 
 def _compute_projective_depth_primary_method(
-    x, f0: float, tolerance: float, max_iter: int = 200
+    x: npt.NDArray, f0: float, tolerance: float, max_iter: int = 200
 ) -> npt.NDArray:
     """データXから基本法で射影的奥行きzを求める
 
@@ -155,7 +157,7 @@ def _compute_projective_depth_primary_method(
 
 
 def _compute_projective_depth_dual_method(
-    x, f0: float, tolerance: float, max_iter: int = 50
+    x: npt.NDArray, f0: float, tolerance: float, max_iter: int = 50
 ) -> npt.NDArray:
     """データXから双対法で射影的奥行きzを求める
 
@@ -245,12 +247,12 @@ def _compute_projective_depth_dual_method(
     return z
 
 
-def _calc_omega(Q):
+def _calc_omega(Q: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     def _create_A_cal(Q):
         n_images = Q.shape[0]
         A_cal = np.zeros((4, 4, 4, 4))
         for n in range(n_images):
-            for (i, j, k, l) in product(range(4), repeat=4):
+            for i, j, k, l in product(range(4), repeat=4):
                 A_cal[i, j, k, l] += (
                     Q[n, 0, i] * Q[n, 0, j] * Q[n, 0, k] * Q[n, 0, l]
                     - Q[n, 0, i] * Q[n, 0, j] * Q[n, 1, k] * Q[n, 1, l]
@@ -344,8 +346,11 @@ def _calc_omega(Q):
     return Omega, sigma, w
 
 
-def _update_K(K, Omega, Q):
+def _update_K(
+    K: npt.NDArray, Omega: npt.NDArray, Q: npt.NDArray
+) -> tuple[npt.NDArray, npt.NDArray]:
     """内部カメラパラメータKを更新する"""
+
     # (n_images, 3, 4) @ (4, 4) @ (n_images, 4, 3) -> (n_images, 3, 3)
     C = Q @ Omega @ Q.transpose(0, 2, 1)
 
@@ -387,7 +392,7 @@ def _update_K(K, Omega, Q):
     return K, J
 
 
-def _euclidean_upgrading(P: npt.NDArray, f0: float):
+def _euclidean_upgrading(P: npt.NDArray, f0: float) -> tuple[npt.NDArray, npt.NDArray]:
     n_images = P.shape[0]
     J_med_ = np.inf
     K = _get_initial_intrinsic_params(n_images, f0)
@@ -418,7 +423,9 @@ def _euclidean_upgrading(P: npt.NDArray, f0: float):
     return H, K
 
 
-def _reconstruct_3d(P: npt.NDArray, S: npt.NDArray, K: npt.NDArray, H: npt.NDArray):
+def _reconstruct_3d(
+    P: npt.NDArray, S: npt.NDArray, K: npt.NDArray, H: npt.NDArray
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     # (4, 4) @ (4, n_points) -> (4, n_points) -> (n_points, 4)
     X = (np.linalg.inv(H) @ S).T
 
@@ -502,7 +509,9 @@ def _normalize_world_axis_with_first_camera(
     return X_, R_, t_
 
 
-def _correct_world_coordinates(X, R, t, method="first_camera"):
+def _correct_world_coordinates(
+    X: npt.NDArray, R: npt.NDArray, t: npt.NDArray, method: str = "first_camera"
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     if method == "first_camera":
         X_, R_, t_ = _normalize_world_axis_with_first_camera(X, R, t)
     elif method == "predict":
@@ -513,7 +522,9 @@ def _correct_world_coordinates(X, R, t, method="first_camera"):
     return X_, R_, t_
 
 
-def perspective_self_calibration(x_list, f0=1.0, tol=0.01, method="primary"):
+def perspective_self_calibration(
+    x_list: list[npt.NDArray], f0=1.0, tol=0.01, method: str = "primary"
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
     """透視投影カメラモデルによるカメラの自己校正
 
     ・f0とtolはx_listのデータのスケールから決定する
