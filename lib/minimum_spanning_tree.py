@@ -47,8 +47,6 @@ class MinimumSpanningTree:
         self._n_nodes = np.max(edges) + 1
         self._union_find = UnionFind(self._n_nodes)
 
-        self._result: NDArray | None = None
-
     def solve(self) -> NDArray:
         """kruskal法で最小全域木を求める"""
         res = []
