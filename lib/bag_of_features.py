@@ -46,6 +46,9 @@ class BagOfFeatures:
         self._clustering_algorithm = clustering_algorithm
 
     def fit(self, image_dataset: ImageDataset | list[NDArray]) -> Self:
+        if len(image_dataset) == 0:
+            raise ValueError("image_dataset is empty.")
+
         res = []
         for img in image_dataset:
             _, des = self._feature_extractor.detectAndCompute(img, None)
@@ -89,6 +92,6 @@ if __name__ == "__main__":
     image_dataset = list(ImageDataset("./images"))
     bow = BagOfFeatures.create("sift", "mini_batch_kmeans")
     bow.fit(image_dataset)
-    result = bow.transform(image_dataset[:1])
+    result = bow.transform(image_dataset[10:12])
 
     print(result)
