@@ -1,10 +1,10 @@
 from itertools import product
-from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
 
 from .utils import unit_vec
+from .factorization import factorization_method
 
 
 def _get_observation_matrix(*data_list: tuple[npt.NDArray, ...]) -> tuple[npt.NDArray, npt.NDArray]:
@@ -23,19 +23,6 @@ def _get_observation_matrix(*data_list: tuple[npt.NDArray, ...]) -> tuple[npt.ND
     W -= t
 
     return W, t.reshape(-1, 2)
-
-
-def factorization_method(
-    W: npt.NDArray[np.floating], n_rank: int = 4
-) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
-    """観測行列Wから因子分解法によって、運動行列Mと形状行列Sを求める"""
-
-    U, Sigma, Vt = np.linalg.svd(W)
-
-    M = U[:, :n_rank]
-    S = np.diag(Sigma[:n_rank]) @ Vt[:n_rank]
-
-    return M, S
 
 
 def _get_initial_intrinsic_params(n_images: int, f0: float) -> npt.NDArray:
@@ -465,7 +452,7 @@ def _reconstruct_3d(
 
 def _predict_world_axis(
     X: npt.NDArray, R: npt.NDArray, t: npt.NDArray
-) -> Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     """
 
     Args:
@@ -491,7 +478,7 @@ def _predict_world_axis(
 
 def _normalize_world_axis_with_first_camera(
     X: npt.NDArray, R: npt.NDArray, t: npt.NDArray
-) -> Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     """第1カメラを基準にシーンを正規化する
 
     Args:
