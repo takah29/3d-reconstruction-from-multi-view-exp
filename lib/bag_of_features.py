@@ -4,7 +4,7 @@ from typing import Self
 import cv2
 import numpy as np
 from numpy.typing import NDArray
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 
 
 class ImageDataset:
@@ -69,23 +69,25 @@ class BagOfFeatures:
         return np.vstack(res)
 
     @staticmethod
-    def create(feature_ext_method, clustring_method, n_features=50):
-        if feature_ext_method == "SIFT":
+    def create(feature_ext_method, clustering_method, n_features=50):
+        if feature_ext_method == "sift":
             feature_extractor = cv2.SIFT_create()
         else:
             raise NotImplementedError
 
-        if clustring_method == "KMeans":
-            clustering_algorithm = KMeans(n_features, n_init="auto")
+        if clustering_method == "kmeans":
+            clusterer = KMeans(n_features, n_init="auto")
+        elif clustering_method == "mini_batch_kmeans":
+            clusterer = MiniBatchKMeans(n_features, n_init="auto")
         else:
             raise NotImplementedError
 
-        return BagOfFeatures(feature_extractor, clustering_algorithm)
+        return BagOfFeatures(feature_extractor, clusterer)
 
 
 if __name__ == "__main__":
     image_dataset = list(ImageDataset("./images"))
-    bow = BagOfFeatures.create("SIFT", "KMeans")
+    bow = BagOfFeatures.create("sift", "mini_batch_kmeans")
     bow.fit(image_dataset)
     result = bow.transform(image_dataset[:1])
 
