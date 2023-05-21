@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Self
+from typing import Self, Any
 
 import cv2
 import numpy as np
@@ -41,11 +41,11 @@ class ImageDataset:
 
 
 class BagOfFeatures:
-    def __init__(self, feature_extractor, clustering_algorithm):
+    def __init__(self, feature_extractor: Any, clustering_algorithm: Any):
         self._feature_extractor = feature_extractor
         self._clustering_algorithm = clustering_algorithm
 
-    def fit(self, image_dataset: ImageDataset) -> Self:
+    def fit(self, image_dataset: ImageDataset | list[NDArray]) -> Self:
         res = []
         for img in image_dataset:
             _, des = self._feature_extractor.detectAndCompute(img, None)
@@ -56,7 +56,7 @@ class BagOfFeatures:
 
         return self
 
-    def transform(self, image_dataset: ImageDataset) -> NDArray:
+    def transform(self, image_dataset: ImageDataset | list[NDArray]) -> NDArray:
         res = []
         for img in image_dataset:
             _, des = self._feature_extractor.detectAndCompute(img, None)
@@ -69,7 +69,7 @@ class BagOfFeatures:
         return np.vstack(res)
 
     @staticmethod
-    def create(feature_ext_method, clustering_method, n_features=50):
+    def create(feature_ext_method: str, clustering_method: str, n_features: int = 50):
         if feature_ext_method == "sift":
             feature_extractor = cv2.SIFT_create()
         else:
