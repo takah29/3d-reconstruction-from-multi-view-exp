@@ -46,7 +46,7 @@ def main():
 
     # 投影データと復元後の再投影データを表示
     reproj_x_list = calc_projected_points(X_, K_, R_, t_)
-    show_2d_projection_data(x_list, reproj_x_list, n_col=6)
+    show_2d_projection_data(x_list, reproj_x_list, n_col=5)
 
     # バンドル調整
     print("Bundle Adjustment")
