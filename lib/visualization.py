@@ -87,9 +87,9 @@ class TwoDimensionalMatrixPlotter:
         if self.is_grid:
             self.current_ax.grid()
 
-    def plot_points(self, x: NDArray, color="black", label=None) -> None:
+    def plot_points(self, x: NDArray, color="black", label=None, alpha=1.0) -> None:
         """2次元点群をプロットする、colorはリストで与えても良い"""
-        self.current_ax.scatter(x[:, 1], x[:, 0], c=color, marker=".", label=label)
+        self.current_ax.scatter(x[:, 1], x[:, 0], c=color, marker=".", label=label, alpha=alpha)
         if label is not None:
             self.current_ax.legend()
 
@@ -102,13 +102,21 @@ class TwoDimensionalMatrixPlotter:
         plt.close()
 
 
-def show_3d_scene_data(X: NDArray, R: NDArray, t: NDArray, color: str | list | None = None) -> None:
+def show_3d_scene_data(
+    X: NDArray,
+    R: NDArray,
+    t: NDArray,
+    color: str | list | None = None,
+    camera_id_list: list[int] | None = None,
+) -> None:
     """データ点とカメラの姿勢を3Dプロットして表示する"""
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
     plotter_3d.set_lim()
     plotter_3d.plot_points(X, color=color)
-    for i, (R_, t_) in enumerate(zip(R, t), start=1):
-        plotter_3d.plot_basis(R_, t_, label=str(i))
+    for i, (R_, t_) in enumerate(zip(R, t)):
+        plotter_3d.plot_basis(
+            R_, t_, label=f"{camera_id_list[i] if camera_id_list is not None else i}"
+        )
     plotter_3d.show()
     plotter_3d.close()
 
@@ -119,6 +127,7 @@ def show_2d_projection_data(
     n_col: int = 6,
     xlim=(-0.5, 0.5),
     ylim=(-0.5, 0.5),
+    camera_id_list: list[int] | None = None,
 ) -> None:
     """投影点と再投影点をプロットして表示する"""
     n_images = len(x_list)
@@ -129,13 +138,22 @@ def show_2d_projection_data(
         for j in range_width:
             # camera(i * j)で射影した2次元データ点のプロット
             plotter_2d.select(n_col * i + j)
-            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", xlim, ylim)
+            camera_id = (
+                camera_id_list[n_col * i + j] if camera_id_list is not None else n_col * i + j + 1
+            )
+            plotter_2d.set_property(
+                f"Camera {camera_id}",
+                xlim,
+                ylim,
+            )
 
-            plotter_2d.plot_points(x_list[n_col * i + j], color="green", label="Projection")
+            plotter_2d.plot_points(
+                x_list[n_col * i + j], color="blue", label="Projection", alpha=1.0
+            )
 
             if reproj_x_list is not None:
                 plotter_2d.plot_points(
-                    reproj_x_list[n_col * i + j], color="red", label="Reprojection"
+                    reproj_x_list[n_col * i + j], color="red", label="Reprojection", alpha=0.3
                 )
 
     plotter_2d.show()
@@ -145,12 +163,11 @@ def show_2d_projection_data(
 def animate(data: list[dict[str, NDArray]]):
     """基底と点群をアニメーションでプロットする
 
-    dataは以下のデータ構造を仮定する
     data = [
-        {"points": X1, "basis": R1, "pos": t1}
-        {"points": X2, "basis": R2, "pos": t2}
+        {"points": X1, "basis": R1, "pos": t1},
+        {"points": X2, "basis": R2, "pos": t2},
         ...
-        {"points": Xn, "basis": Rn, "pos": tn}
+        {"points": Xn, "basis": Rn, "pos": tn},
     ]
     """
     plotter_3d = ThreeDimensionalPlotter()
@@ -164,7 +181,7 @@ def animate(data: list[dict[str, NDArray]]):
             plotter_3d.set_lim()
             plotter_3d.plot_points(X)
             for i, (R_, t_) in enumerate(zip(R, t), start=1):
-                plotter_3d.plot_basis(R_, t_, label=f"camera{i}")
+                plotter_3d.plot_basis(R_, t_, label=str(i))
 
             plotter_3d.pause(0.05)
             plotter_3d.ax.cla()
