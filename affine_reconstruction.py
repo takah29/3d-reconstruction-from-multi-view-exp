@@ -52,8 +52,10 @@ def main():
 
     # バンドル調整
     print("Bundle Adjustment")
-    bundle_adjuster = BundleAdjuster(x_list, X_, K_, R_, t_)
-    X_, K_, R_, t_ = bundle_adjuster.optimize(delta_tol=1e-6, scale_factor=2.0)
+    bundle_adjuster = BundleAdjuster(
+        np.stack(x_list).transpose(1, 0, 2), X_, K_, R_, t_, axis="x-up_z-forward"
+    )
+    X_, K_, R_, t_ = bundle_adjuster.optimize(2.0, 1e-8, max_iter=100, is_debug=True)
 
     # バンドル調整後のシーンデータの表示
     show_3d_scene_data(X_, R_, t_)
