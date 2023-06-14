@@ -211,7 +211,7 @@ class BundleAdjuster:
 
         return self._X, self._get_K(self._f, self._u), self._R, self._t
 
-    def get_log(self) -> list[dict[str, npt.NDArray]]:
+    def get_log(self) -> list[dict[str, npt.NDArray | float]]:
         """イテレーションごとに記録した3次元点とカメラパラメータを取得する"""
         return self._log
 

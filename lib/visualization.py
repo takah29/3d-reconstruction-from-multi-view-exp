@@ -47,9 +47,9 @@ class ThreeDimensionalPlotter:
         if label is not None:
             self.ax.text(pos[1], pos[2], pos[0], label)
 
-    def plot_points(self, X: NDArray, color: str | list = "black") -> None:
+    def plot_points(self, X: NDArray, color: str | list | None = "black") -> None:
         """3次元点群をプロットする、colorはリストで与えても良い"""
-        self.ax.scatter(X[:, 1], X[:, 2], X[:, 0], c=color, marker="o")
+        self.ax.scatter(X[:, 1], X[:, 2], X[:, 0], c=color, marker=".")
 
     def show(self) -> None:
         """3次元グラフを表示する"""
@@ -79,8 +79,11 @@ class TwoDimensionalMatrixPlotter:
     def set_property(self, title: str, xlim=[-1.0, 1.0], ylim=[-1.0, 1.0]) -> None:
         self.current_ax.set_title(title)
         self.current_ax.set_aspect("equal")
+
+        # matplotlibと違いx上、y右を想定しているので変数名が異なっている
         self.current_ax.set_xlim(ylim)
         self.current_ax.set_ylim(xlim)
+
         if self.is_grid:
             self.current_ax.grid()
 
@@ -99,11 +102,11 @@ class TwoDimensionalMatrixPlotter:
         plt.close()
 
 
-def show_3d_scene_data(X: NDArray, R: NDArray, t: NDArray) -> None:
+def show_3d_scene_data(X: NDArray, R: NDArray, t: NDArray, color: str | list | None = None) -> None:
     """データ点とカメラの姿勢を3Dプロットして表示する"""
     plotter_3d = ThreeDimensionalPlotter(figsize=(10, 10))
     plotter_3d.set_lim()
-    plotter_3d.plot_points(X)
+    plotter_3d.plot_points(X, color=color)
     for i, (R_, t_) in enumerate(zip(R, t), start=1):
         plotter_3d.plot_basis(R_, t_, label=f"Camera{i}")
     plotter_3d.show()
@@ -111,7 +114,11 @@ def show_3d_scene_data(X: NDArray, R: NDArray, t: NDArray) -> None:
 
 
 def show_2d_projection_data(
-    x_list: list[NDArray], reproj_x_list: list[NDArray] | None = None, n_col: int = 6
+    x_list: list[NDArray],
+    reproj_x_list: list[NDArray] | None = None,
+    n_col: int = 6,
+    xlim=(-0.5, 0.5),
+    ylim=(-0.5, 0.5),
 ) -> None:
     """投影点と再投影点をプロットして表示する"""
     n_images = len(x_list)
@@ -122,7 +129,7 @@ def show_2d_projection_data(
         for j in range_width:
             # camera(i * j)で射影した2次元データ点のプロット
             plotter_2d.select(n_col * i + j)
-            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", (-0.5, 0.5), (-0.5, 0.5))
+            plotter_2d.set_property(f"Camera {n_col * i + j + 1}", xlim, ylim)
 
             plotter_2d.plot_points(x_list[n_col * i + j], color="green", label="Projection")
 

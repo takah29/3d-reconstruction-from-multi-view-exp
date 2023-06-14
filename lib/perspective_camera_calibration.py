@@ -497,7 +497,7 @@ def _normalize_world_axis_with_first_camera(
     return X_, R_, t_
 
 
-def _correct_world_coordinates(
+def correct_world_coordinates(
     X: npt.NDArray, R: npt.NDArray, t: npt.NDArray, method: str = "first_camera"
 ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     if method == "first_camera":
@@ -535,6 +535,6 @@ def perspective_self_calibration(
     H, K = _euclidean_upgrading(P, f0)
     X, R, t = _reconstruct_3d(P, S, K, H)
 
-    X, R, t = _correct_world_coordinates(X, R, t, method="predict")
+    X, R, t = correct_world_coordinates(X, R, t, method="predict")
 
     return X, R, t, K
