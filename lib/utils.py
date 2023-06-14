@@ -52,7 +52,7 @@ def sample_hemisphere_points(num: int, r: float) -> NDArray:
     return np.array(points)
 
 
-def set_points1():
+def set_points():
     points = []
     for x in np.linspace(-1, 1, 10):
         for theta in np.linspace(np.pi / 2, 3 * np.pi / 2, 20):

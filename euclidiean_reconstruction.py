@@ -6,7 +6,7 @@ from lib.perspective_camera_calibration import (
     perspective_self_calibration,
     correct_world_coordinates,
 )
-from lib.utils import sample_hemisphere_points, set_points1
+from lib.utils import sample_hemisphere_points, set_points
 from lib.visualization import animate, show_2d_projection_data, show_3d_scene_data
 
 
@@ -27,7 +27,7 @@ def main():
     K_gt, R_gt, t_gt = get_camera_parames(cameras)
 
     # データ点の設定
-    X_gt = set_points1()
+    X_gt = set_points()
 
     # シーンデータの表示
     show_3d_scene_data(X_gt, R_gt, t_gt)
@@ -62,7 +62,7 @@ def main():
 
     # 投影データとバンドル調整後の再投影データを表示
     reproj_x_list = calc_projected_points(X_, K_, R_, t_)
-    show_2d_projection_data(x_list, reproj_x_list, n_col=6)
+    show_2d_projection_data(x_list, reproj_x_list, n_col=5)
 
     animate(data)
 

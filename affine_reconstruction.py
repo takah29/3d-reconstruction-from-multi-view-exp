@@ -7,7 +7,7 @@ from lib.affine_camera_calibration import (
 )
 from lib.bundle_adjustment import BundleAdjuster
 from lib.camera import Camera, calc_projected_points, get_camera_parames
-from lib.utils import sample_hemisphere_points, set_points1
+from lib.utils import sample_hemisphere_points, set_points
 from lib.visualization import show_2d_projection_data, show_3d_scene_data
 
 
@@ -28,7 +28,7 @@ def main():
     K_gt, R_gt, t_gt = get_camera_parames(cameras)
 
     # データ点の設定
-    X_gt = set_points1()
+    X_gt = set_points()
 
     # シーンデータの表示
     show_3d_scene_data(X_gt, R_gt, t_gt)

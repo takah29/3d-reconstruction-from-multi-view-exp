@@ -108,7 +108,7 @@ def show_3d_scene_data(X: NDArray, R: NDArray, t: NDArray, color: str | list | N
     plotter_3d.set_lim()
     plotter_3d.plot_points(X, color=color)
     for i, (R_, t_) in enumerate(zip(R, t), start=1):
-        plotter_3d.plot_basis(R_, t_, label=f"Camera{i}")
+        plotter_3d.plot_basis(R_, t_, label=str(i))
     plotter_3d.show()
     plotter_3d.close()
 
