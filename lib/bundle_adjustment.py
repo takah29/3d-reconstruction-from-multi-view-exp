@@ -1,7 +1,3 @@
-from .perspective_camera_calibration import (
-    _normalize_world_axis_with_first_camera,
-    _predict_world_axis,
-)
 from .utils import get_rotation_matrix
 
 import numpy as np
@@ -9,21 +5,57 @@ import numpy.typing as npt
 from scipy.linalg import block_diag
 
 
+def transform_local_coodinates(
+    X: npt.NDArray,
+    R: npt.NDArray,
+    t: npt.NDArray,
+    axis="x-right_z-forward",
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    """第1カメラを基準にシーンを正規化する
+
+    Args:
+        X (npt.NDArray): 3次元点
+        R (npt.NDArray): カメラの回転行列
+        t (npt.NDArray): カメラの並進
+    """
+
+    X_ = X - t[0]
+    t_ = t - t[0]
+
+    # (3, ) @ (3, 3) @ (3, 1) -> (3, )
+    if axis == "x-right_z-forward":
+        j = np.array([np.sign(t_[1, 0]), 0, 0])
+    elif axis == "x-up_z-forward":
+        j = np.array([0, np.sign(t_[1, 1]), 0])
+    else:
+        raise ValueError()
+
+    s = j @ R[0].T @ t_[1][:, np.newaxis]
+
+    X_ = ((X_) @ R[0]) / s
+    R_ = R[0].T @ R
+    t_ = ((t_) @ R[0]) / s
+
+    return X_, R_, t_
+
+
 class BundleAdjuster:
     def __init__(
         self,
-        x_list: list[npt.NDArray],
+        x: npt.NDArray,
         init_X: npt.NDArray,
         init_K: npt.NDArray,
         init_R: npt.NDArray,
         init_t: npt.NDArray,
-        f0=1.0,
+        f0: float = 1.0,
+        visibility_index: npt.NDArray | None = None,
+        axis: str = "x-right_z-forward",
     ):
         # (n_points, n_images, 2)
-        self._x = np.stack(x_list, axis=1)
+        self._x = x
 
         # (n_points, 3), (n_images, 3, 3), (n_images, 3)
-        self._X, self._R, self._t = _normalize_world_axis_with_first_camera(init_X, init_R, init_t)
+        self._X, self._R, self._t = transform_local_coodinates(init_X, init_R, init_t, axis=axis)
 
         # (n_images, )
         self._f = init_K[:, 0, 0]
@@ -36,18 +68,33 @@ class BundleAdjuster:
         self._n_points = init_X.shape[0]
         self._n_images = init_R.shape[0]
 
-        # カメラパラメータはR1=I, t1=0, t2_2=1を仮定しているので、該当の未知数を削除するためのインデックスを用意する
-        # カメラパラメータ: (f1, u01, v01, t1_1, t1_2, t1_3, omega1_1, omega1_2, omega1_3, f2, u02, ...)
-        self._remove_ind = np.array([3, 4, 5, 6, 7, 8, 13])
+        self._visibility_matrix = (
+            visibility_index
+            if visibility_index is not None
+            else np.ones(self._x.shape[:2], dtype=np.bool_)
+        )
 
-        # 削除したカメラパラメータの要素を挿入するためのインデックス
-        self._insert_ind = np.array([3, 3, 3, 3, 3, 3, 7])
+        if axis == "x-right_z-forward":
+            # カメラパラメータはR1=I, t1=0, t2_1=1を仮定しているので、該当の未知数を削除するためのインデックスを用意する
+            # カメラパラメータ: (f1, u01, v01, t1_1, t1_2, t1_3, omega1_1, omega1_2, omega1_3, f2, u02, ...)
+            self._remove_ind = np.array([3, 4, 5, 6, 7, 8, 12])
+
+            # 削除したカメラパラメータの要素を挿入するためのインデックス
+            self._insert_ind = np.array([3, 3, 3, 3, 3, 3, 6])
+        elif axis == "x-up_z-forward":
+            # カメラパラメータはR1=I, t1=0, t2_2=1を仮定しているので、該当の未知数を削除するためのインデックスを用意する
+            self._remove_ind = np.array([3, 4, 5, 6, 7, 8, 13])
+            self._insert_ind = np.array([3, 3, 3, 3, 3, 3, 7])
 
         # 最適化時にイテレーションごとの3次元点とカメラパラメータのログを保存する変数
-        self._log: list[dict[str, npt.NDArray]] = []
+        self._log: list[dict[str, npt.NDArray | float]] = []
 
     def optimize(
-        self, delta_tol: float, scale_factor: float = 10.0, is_debug: bool = False
+        self,
+        scale_factor: float = 10.0,
+        delta_tol: float = 1e-8,
+        max_iter: int = 100,
+        is_debug: bool = False,
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
         """再投影誤差を最小化するX, K, R, tを求める"""
         K = self._get_K(self._f, self._u)
@@ -57,7 +104,12 @@ class BundleAdjuster:
         if is_debug:
             self._log.clear()
             self._log.append(
-                {"points": self._X.copy(), "basis": self._R.copy(), "pos": self._t.copy()}
+                {
+                    "points": self._X.copy(),
+                    "basis": self._R.copy(),
+                    "pos": self._t.copy(),
+                    "reprojection_error": E,
+                }
             )
 
         c = 0.0001
@@ -137,23 +189,27 @@ class BundleAdjuster:
 
             if is_debug:
                 self._log.append(
-                    {"points": self._X.copy(), "basis": self._R.copy(), "pos": self._t.copy()}
+                    {
+                        "points": self._X.copy(),
+                        "basis": self._R.copy(),
+                        "pos": self._t.copy(),
+                        "reprojection_error": E_,
+                    }
                 )
 
             count += 1
             reprojection_error_delta = np.abs(E_ - E)
+
             print(f"Iteration {count}: reprojection_error_delta = {reprojection_error_delta}")
 
-            # 再投影誤差が変化しなくなったら終了
-            if reprojection_error_delta <= delta_tol:
+            # 再投影誤差が変化しないまたは、max_iterに達したら終了
+            if reprojection_error_delta <= delta_tol or count >= max_iter:
                 break
             else:
                 E = E_
                 c /= scale_factor
 
-        X_, R_, t_ = _predict_world_axis(self._X, self._R, self._t)
-
-        return X_, self._get_K(self._f, self._u), R_, t_
+        return self._X, self._get_K(self._f, self._u), self._R, self._t
 
     def get_log(self) -> list[dict[str, npt.NDArray]]:
         """イテレーションごとに記録した3次元点とカメラパラメータを取得する"""
@@ -362,8 +418,9 @@ class BundleAdjuster:
 
         # (n_points, n_images, 3)
         d = d1[..., np.newaxis] * d2 + d3[..., np.newaxis] * d4
+        d = self._visibility_matrix[..., np.newaxis] * d
 
-        # (n_points, n_images, 3) / (n_points, n_images, 1)
+        # (n_points, n_images, 1) * (n_points, n_images, 3) / (n_points, n_images, 1)
         # -> (n_points, n_images, 3) -> (n_points, 3) -> (3 * n_points, )
         d_P = 2 * (d / r[..., np.newaxis] ** 2).sum(axis=1).ravel()
 
@@ -403,8 +460,9 @@ class BundleAdjuster:
 
         # (n_points, n_images, 9)
         d = d1[..., np.newaxis] * d2 + d3[..., np.newaxis] * d4
+        d = self._visibility_matrix[..., np.newaxis] * d
 
-        # (n_points, n_images, 9) / (n_points, n_images, 1)
+        # (n_points, n_images, 1) * (n_points, n_images, 9) / (n_points, n_images, 1)
         # -> (n_points, n_images, 9) -> (n_images, 9) -> (9 * n_images, )
         d_F = 2 * (d / r[..., np.newaxis] ** 2).sum(axis=0).ravel()
 
@@ -447,8 +505,9 @@ class BundleAdjuster:
             d1[..., np.newaxis] @ d1[..., np.newaxis, :]
             + d2[..., np.newaxis] @ d2[..., np.newaxis, :]
         )
+        d = self._visibility_matrix[..., np.newaxis, np.newaxis] * d
 
-        # (n_points, n_images, 3, 3) / (n_points, n_images, 1, 1)
+        # (n_points, n_images, 1, 1) * (n_points, n_images, 3, 3) / (n_points, n_images, 1, 1)
         # -> (n_points, n_images, 3, 3) -> (n_points, 3, 3)
         matE = 2 * (d / r[..., np.newaxis, np.newaxis] ** 4).sum(axis=1)
 
@@ -498,6 +557,7 @@ class BundleAdjuster:
             d1[..., np.newaxis] @ d2[..., np.newaxis, :]
             + d3[..., np.newaxis] @ d4[..., np.newaxis, :]
         )
+        d = self._visibility_matrix[..., np.newaxis, np.newaxis] * d
 
         # (n_points, n_images, 3, 9) / (n_points, n_images, 1, 1) -> (n_points, n_images, 3, 9)
         matF = 2 * d / r[..., np.newaxis, np.newaxis] ** 4
@@ -544,6 +604,7 @@ class BundleAdjuster:
             d1[..., np.newaxis] @ d1[..., np.newaxis, :]
             + d2[..., np.newaxis] @ d2[..., np.newaxis, :]
         )
+        d = self._visibility_matrix[..., np.newaxis, np.newaxis] * d
 
         # (n_points, n_images, 9, 9) / (n_points, n_images, 1, 1)
         # -> (n_points, n_images, 9, 9) -> (n_images, 9, 9)
@@ -563,10 +624,12 @@ class BundleAdjuster:
     def _calc_reprojection_error(self, p: npt.NDArray, q: npt.NDArray, r: npt.NDArray) -> float:
         """再投影誤差Eを求める"""
 
-        # (n_images, n_points)
+        # (n_points, n_images)
         x1 = self._x[:, :, 0]
         x2 = self._x[:, :, 1]
 
-        E = ((p / r - x1 / self._f0) ** 2 + (q / r - x2 / self._f0) ** 2).sum()
+        E = (
+            self._visibility_matrix * ((p / r - x1 / self._f0) ** 2 + (q / r - x2 / self._f0) ** 2)
+        ).sum()
 
         return E
