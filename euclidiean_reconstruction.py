@@ -54,7 +54,6 @@ def main():
         np.stack(x_list).transpose(1, 0, 2), X_, K_, R_, t_, axis="x-up_z-forward"
     )
     X_, K_, R_, t_ = bundle_adjuster.optimize(2.0, 1e-8, max_iter=100, is_debug=True)
-    X_, R_, t_ = correct_world_coordinates(X_, R_, t_, method="predict")
     data = bundle_adjuster.get_log()
 
     # バンドル調整後のシーンデータの表示
