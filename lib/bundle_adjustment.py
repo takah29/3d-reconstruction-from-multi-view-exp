@@ -21,9 +21,9 @@ class BundleAdjuster:
     ):
         # 入力時の座標へ戻すためにカメラパラメータを保存しておく
         if axis == "x-right_z-forward":
-            c0c1_len = init_R[0, :, 0] @ (init_t[1] - init_t[0])
+            c0c1_len = np.abs(init_R[0, :, 0] @ (init_t[1] - init_t[0]))
         elif axis == "x-up_z-forward":
-            c0c1_len = init_R[0, :, 1] @ (init_t[1] - init_t[0])
+            c0c1_len = np.abs(init_R[0, :, 1] @ (init_t[1] - init_t[0]))
         else:
             raise ValueError()
         self._init_camera0_params = {
