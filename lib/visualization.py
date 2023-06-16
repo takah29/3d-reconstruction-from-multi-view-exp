@@ -139,7 +139,7 @@ def show_2d_projection_data(
             # camera(i * j)で射影した2次元データ点のプロット
             plotter_2d.select(n_col * i + j)
             camera_id = (
-                camera_id_list[n_col * i + j] if camera_id_list is not None else n_col * i + j + 1
+                camera_id_list[n_col * i + j] if camera_id_list is not None else n_col * i + j
             )
             plotter_2d.set_property(
                 f"Camera {camera_id}",
@@ -180,7 +180,7 @@ def animate(data: list[dict[str, NDArray]]):
 
             plotter_3d.set_lim()
             plotter_3d.plot_points(X)
-            for i, (R_, t_) in enumerate(zip(R, t), start=1):
+            for i, (R_, t_) in enumerate(zip(R, t)):
                 plotter_3d.plot_basis(R_, t_, label=str(i))
 
             plotter_3d.pause(0.05)
