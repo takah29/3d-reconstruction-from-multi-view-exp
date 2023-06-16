@@ -1,42 +1,10 @@
-from .utils import get_rotation_matrix
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 from scipy.linalg import block_diag
 
-
-def transform_local_coodinates(
-    X: npt.NDArray,
-    R: npt.NDArray,
-    t: npt.NDArray,
-    axis="x-right_z-forward",
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-    """第1カメラを基準にシーンを正規化する
-
-    Args:
-        X (npt.NDArray): 3次元点
-        R (npt.NDArray): カメラの回転行列
-        t (npt.NDArray): カメラの並進
-    """
-
-    X_ = X - t[0]
-    t_ = t - t[0]
-
-    # (3, ) @ (3, 3) @ (3, 1) -> (3, )
-    if axis == "x-right_z-forward":
-        j = np.array([np.sign(t_[1, 0]), 0, 0])
-    elif axis == "x-up_z-forward":
-        j = np.array([0, np.sign(t_[1, 1]), 0])
-    else:
-        raise ValueError()
-
-    s = j @ R[0].T @ t_[1][:, np.newaxis]
-
-    X_ = ((X_) @ R[0]) / s
-    R_ = R[0].T @ R
-    t_ = ((t_) @ R[0]) / s
-
-    return X_, R_, t_
+from .utils import get_rotation_matrix
 
 
 class BundleAdjuster:
@@ -51,11 +19,27 @@ class BundleAdjuster:
         visibility_index: npt.NDArray | None = None,
         axis: str = "x-right_z-forward",
     ):
+        # 入力時の座標へ戻すためにカメラパラメータを保存しておく
+        if axis == "x-right_z-forward":
+            c0c1_len = init_R[0, :, 0] @ (init_t[1] - init_t[0])
+        elif axis == "x-up_z-forward":
+            c0c1_len = init_R[0, :, 1] @ (init_t[1] - init_t[0])
+        else:
+            raise ValueError()
+        self._init_camera0_params = {
+            "R": init_R[0],
+            "t": init_t[0],
+            "c0c1_len": c0c1_len,
+        }
+
+        # 最適化対称の変数を格納
         # (n_points, n_images, 2)
         self._x = x
 
         # (n_points, 3), (n_images, 3, 3), (n_images, 3)
-        self._X, self._R, self._t = transform_local_coodinates(init_X, init_R, init_t, axis=axis)
+        self._X, self._R, self._t = BundleAdjuster._transform_to_normalize_coodinates(
+            init_X, init_R, init_t, axis=axis
+        )
 
         # (n_images, )
         self._f = init_K[:, 0, 0]
@@ -68,7 +52,8 @@ class BundleAdjuster:
         self._n_points = init_X.shape[0]
         self._n_images = init_R.shape[0]
 
-        self._visibility_matrix = (
+        # 可視性指標
+        self._visibility_index = (
             visibility_index
             if visibility_index is not None
             else np.ones(self._x.shape[:2], dtype=np.bool_)
@@ -209,11 +194,68 @@ class BundleAdjuster:
                 E = E_
                 c /= scale_factor
 
+        # 最適化前座標系へ戻す
+        self._X, self._R, self._t = BundleAdjuster._inverse_transform_to_global_coordinates(
+            self._init_camera0_params, self._X, self._R, self._t
+        )
+
         return self._X, self._get_K(self._f, self._u), self._R, self._t
 
     def get_log(self) -> list[dict[str, npt.NDArray | float]]:
         """イテレーションごとに記録した3次元点とカメラパラメータを取得する"""
         return self._log
+
+    @staticmethod
+    def _transform_to_normalize_coodinates(
+        X: npt.NDArray,
+        R: npt.NDArray,
+        t: npt.NDArray,
+        axis: str = "x-right_z-forward",
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+        """第1カメラを基準にシーンを正規化する
+
+        Args:
+            X (npt.NDArray): 3次元点
+            R (npt.NDArray): カメラの回転行列
+            t (npt.NDArray): カメラの並進
+        """
+
+        X_ = X - t[0]
+        t_ = t - t[0]
+
+        # (3, ) @ (3, 3) @ (3, 1) -> (3, )
+        if axis == "x-right_z-forward":
+            j = np.array([np.sign(t_[1, 0]), 0, 0])
+        elif axis == "x-up_z-forward":
+            j = np.array([0, np.sign(t_[1, 1]), 0])
+        else:
+            raise ValueError()
+
+        s = j @ R[0].T @ t_[1][:, np.newaxis]
+
+        X_ = ((X_) @ R[0]) / s
+        R_ = R[0].T @ R
+        t_ = ((t_) @ R[0]) / s
+
+        return X_, R_, t_
+
+    @staticmethod
+    def _inverse_transform_to_global_coordinates(
+        camera0_param: dict[str, Any],
+        X: npt.NDArray,
+        R: npt.NDArray,
+        t: npt.NDArray,
+    ):
+        """グローバル座標へ戻す"""
+        R0 = camera0_param["R"]
+        t0 = camera0_param["t"]
+        scale = camera0_param["c0c1_len"]
+
+        X_ = (scale * X) @ R0.T + t0
+        t_ = (scale * t) @ R0.T + t0
+        R_ = R0 @ R
+
+        return X_, R_, t_
 
     def _update_3d_points(self, delta_X: npt.NDArray) -> npt.NDArray:
         return self._X + delta_X
@@ -418,7 +460,7 @@ class BundleAdjuster:
 
         # (n_points, n_images, 3)
         d = d1[..., np.newaxis] * d2 + d3[..., np.newaxis] * d4
-        d = self._visibility_matrix[..., np.newaxis] * d
+        d = self._visibility_index[..., np.newaxis] * d
 
         # (n_points, n_images, 1) * (n_points, n_images, 3) / (n_points, n_images, 1)
         # -> (n_points, n_images, 3) -> (n_points, 3) -> (3 * n_points, )
@@ -460,7 +502,7 @@ class BundleAdjuster:
 
         # (n_points, n_images, 9)
         d = d1[..., np.newaxis] * d2 + d3[..., np.newaxis] * d4
-        d = self._visibility_matrix[..., np.newaxis] * d
+        d = self._visibility_index[..., np.newaxis] * d
 
         # (n_points, n_images, 1) * (n_points, n_images, 9) / (n_points, n_images, 1)
         # -> (n_points, n_images, 9) -> (n_images, 9) -> (9 * n_images, )
@@ -505,7 +547,7 @@ class BundleAdjuster:
             d1[..., np.newaxis] @ d1[..., np.newaxis, :]
             + d2[..., np.newaxis] @ d2[..., np.newaxis, :]
         )
-        d = self._visibility_matrix[..., np.newaxis, np.newaxis] * d
+        d = self._visibility_index[..., np.newaxis, np.newaxis] * d
 
         # (n_points, n_images, 1, 1) * (n_points, n_images, 3, 3) / (n_points, n_images, 1, 1)
         # -> (n_points, n_images, 3, 3) -> (n_points, 3, 3)
@@ -557,7 +599,7 @@ class BundleAdjuster:
             d1[..., np.newaxis] @ d2[..., np.newaxis, :]
             + d3[..., np.newaxis] @ d4[..., np.newaxis, :]
         )
-        d = self._visibility_matrix[..., np.newaxis, np.newaxis] * d
+        d = self._visibility_index[..., np.newaxis, np.newaxis] * d
 
         # (n_points, n_images, 3, 9) / (n_points, n_images, 1, 1) -> (n_points, n_images, 3, 9)
         matF = 2 * d / r[..., np.newaxis, np.newaxis] ** 4
@@ -604,7 +646,7 @@ class BundleAdjuster:
             d1[..., np.newaxis] @ d1[..., np.newaxis, :]
             + d2[..., np.newaxis] @ d2[..., np.newaxis, :]
         )
-        d = self._visibility_matrix[..., np.newaxis, np.newaxis] * d
+        d = self._visibility_index[..., np.newaxis, np.newaxis] * d
 
         # (n_points, n_images, 9, 9) / (n_points, n_images, 1, 1)
         # -> (n_points, n_images, 9, 9) -> (n_images, 9, 9)
@@ -629,7 +671,7 @@ class BundleAdjuster:
         x2 = self._x[:, :, 1]
 
         E = (
-            self._visibility_matrix * ((p / r - x1 / self._f0) ** 2 + (q / r - x2 / self._f0) ** 2)
+            self._visibility_index * ((p / r - x1 / self._f0) ** 2 + (q / r - x2 / self._f0) ** 2)
         ).sum()
 
         return E
