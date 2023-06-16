@@ -28,13 +28,13 @@ pipenv run python euclidiean_reconstruction.py
 
 The left image is the ground-truth. The middle image is the initial value estimated by the factorization method. The right image shows the initial values estimated by the factorization method and optimized by bundle adjustment.
 
-![reconstruction](./images/reconstruction.jpg)
+![reconstruction](./images/reconstruction.png)
 
 ### Reprojection
 
 The image above is a reprojection of the initial values estimated by the factorization method. The lower image shows it optimized by bundle adjustment.
 
-![reprojection](./images/reprojection.jpg)
+![reprojection](./images/reprojection.png)
 
 ## Reference
 
